@@ -1,0 +1,26 @@
+{
+  "name": "viber-league",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Viber League - mobile-first arcade football club game (pre-MVP prototype)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "bundle": "npm run build && node tools/cdp/inline-build.mjs",
+    "shots": "tools/cdp/run.sh tools/cdp/flow-club.mjs docs/screens",
+    "shots:portrait": "VW=390 VH=844 tools/cdp/run.sh tools/cdp/flow-club.mjs docs/screens-portrait",
+    "sheet": "python3 tools/cdp/contact-sheet.py docs/screens docs/viber-league-club.png --cols 3 --scale 0.52",
+    "preview": "vite preview --host",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

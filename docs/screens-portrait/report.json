@@ -1,0 +1,196 @@
+{
+ "viewport": "390x844",
+ "shots": [
+  {
+   "name": "01-menu",
+   "screen": "screen.menu-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "02-league-table",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "03-league-fixtures",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "04-squad-empty",
+   "screen": "screen.squad-screen.squad-view",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "05-players-all",
+   "screen": "screen.squad-screen.hero-select.players-screen",
+   "clipped": 0,
+   "scrolls": 2,
+   "spill": 8
+  },
+  {
+   "name": "06-players-gk",
+   "screen": "screen.squad-screen.hero-select.players-screen",
+   "clipped": 0,
+   "scrolls": 2,
+   "spill": 8
+  },
+  {
+   "name": "07-players-sorted",
+   "screen": "screen.squad-screen.hero-select.players-screen",
+   "clipped": 0,
+   "scrolls": 2,
+   "spill": 8
+  },
+  {
+   "name": "08-career-empty",
+   "screen": "screen.squad-screen.career-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "09-settings",
+   "screen": "screen.squad-screen.settings-screen",
+   "clipped": 0,
+   "scrolls": 1,
+   "spill": 8
+  },
+  {
+   "name": "10-settings-armed",
+   "screen": "screen.squad-screen.settings-screen",
+   "clipped": 0,
+   "scrolls": 1,
+   "spill": 8
+  },
+  {
+   "name": "10b-settings-sound",
+   "screen": "screen.squad-screen.settings-screen",
+   "clipped": 0,
+   "scrolls": 1,
+   "spill": 8
+  },
+  {
+   "name": "11-squad-picked",
+   "screen": "screen.squad-screen.hero-select",
+   "clipped": 0,
+   "scrolls": 7,
+   "spill": 8
+  },
+  {
+   "name": "12-venue",
+   "screen": "screen.squad-screen.venue-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 8
+  },
+  {
+   "name": "13-minutes",
+   "screen": "screen.squad-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "14-opponent",
+   "screen": "screen.squad-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "15-match",
+   "screen": "(none)",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "16-halftime",
+   "screen": "screen.overlay-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "17-result",
+   "screen": "screen.overlay-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "18-league-after",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "19-fixtures-after",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "20-career-after",
+   "screen": "screen.squad-screen.career-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "21-league-after-reload",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "22-muted-match",
+   "screen": "(none)",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "23-onboard",
+   "screen": "screen.profile-screen.onboard-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "24-onboard-crest",
+   "screen": "screen.profile-screen.onboard-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "25-title-new-club",
+   "screen": "screen.menu-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "26-account-sheet",
+   "screen": "screen.overlay-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  }
+ ],
+ "events": [],
+ "fails": 0
+}

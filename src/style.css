@@ -1,0 +1,4613 @@
+/* ==========================================================================
+   VIBER LEAGUE — game UI design system
+   A premium cartoon mobile football game, not a web dashboard.
+
+   The layering contract, bottom to top:
+     WORLD      the 3D stadium + pitch rendered into #stage
+     HERO       the 3D Viber on the showcase stage (still #stage)
+     SCRIM      the atmospheric gradient on .screen — translucent in the middle
+     UI         cards, badges, buttons, HUD
+     GLOW       selection rings, shine, particles
+
+   Nothing here may block the middle of the screen with an opaque panel, or the
+   hero stops reading as part of the world.
+   ========================================================================== */
+
+:root {
+  /* ==========================================================================
+     SHARED PALETTE — the same tokens Viber Brawl uses.
+     Viber League and Viber Brawl are one project and must read as one family:
+     the same electric lime, the same warm cream text, the same near-black
+     outline on every border, the same chunky hard-shadow components, the same
+     Baloo 2 typeface.
+     ========================================================================== */
+  --outline: #0a0a0a; /* every border in the UI */
+  --cream: #f3e6c4; /* primary text — warm, never cold white */
+  --lime: #dff902; /* the brand */
+  --lime-text: #c8f000;
+  --navy: #0b1220;
+  --navy-mid: #152238;
+  --navy-deep: #060a14;
+  --lantern: #ff9a1f;
+  --lantern-gold: #ffd36a;
+  --vibe-purple: #a56bff;
+  --vibe-purple-deep: #7b5cff;
+  --pink: #5cffe7;
+  --muted: rgba(243, 230, 196, 0.55);
+  --on-lime: #0c0f08; /* text sitting on a lime fill */
+
+  /* ---- Viber League's own layer: the football world ----
+     Viber Brawl is a brawler in a navy arena; Viber League is a night match
+     under floodlights. So the *world* and the panel surfaces stay green-black
+     where Viber Brawl is navy. That is the "different feel" — same UI, same
+     colours, different world. */
+  --ink-0: #0c0f08;
+  --ink-1: #10150c;
+  --ink-2: #161d13;
+  --ink-3: #1c2416;
+  --ink-4: #232d1a;
+  --ink-5: #2f3c20;
+  --panel: rgba(16, 21, 12, 0.97);
+  --panel-2: rgba(24, 31, 17, 0.98);
+
+  /* `--ink` is the light text colour in this codebase (the reference calls its
+     dark colour `--ink`), so it becomes cream rather than being renamed. */
+  --ink: #f3e6c4;
+  --ink-dim: rgba(243, 230, 196, 0.62);
+  --ink-mute: rgba(243, 230, 196, 0.38);
+
+  /* ---- energy accents ----
+     Viber lime is the brand. Everything else is an *effect* colour: the
+     opponent, the roles, stadium lighting, feedback. */
+  --lime-hi: #f0ff9c;
+  --lime-deep: #93a800;
+  --lime-glow: rgba(223, 249, 2, 0.5);
+
+  --cyan: #5cffe7;
+  --violet: #a56bff;
+  --magenta: #ff4fa3;
+  --gold: #ffd36a;
+  --orange: #ff9a1f;
+  --red: #ff5b5b;
+  --ice: #67e8f9;
+
+  /* ---- role accents (FWD red, DEF green, MID purple, GK icy) ---- */
+  --role-GK: #67e8f9;
+  --role-DEF: #4ade80;
+  --role-MID: #a855f7;
+  --role-FWD: #ff5a3c;
+
+  /* ---- possession / ownership ----
+     The human's five wear lime. The CPU always wears a warm or violet ring so
+     the two sides can never be confused at a glance. */
+  --own-user: #dff902;
+  --own-cpu: #ff5b5b;
+  --own-cpu-alt: #ff9a1f;
+
+  /* ---- depth: HARD offset shadows, no blur ----
+     The signature of the family. A soft blurred drop shadow reads as a web
+     card; a solid offset reads as chunky pressed-plastic game furniture. */
+  --sh-lift: 0 5px 0 rgba(0, 0, 0, 0.7);
+  --sh-panel: 0 10px 0 rgba(0, 0, 0, 0.72);
+  --sh-press: 0 1px 0 rgba(0, 0, 0, 0.7);
+  --hair: rgba(223, 249, 2, 0.22);
+  --hair-2: rgba(243, 230, 196, 0.1);
+  /* the dashed separator used inside panels */
+  --rule: rgba(243, 230, 196, 0.15);
+
+  /* ---- type ---- */
+  --font-display: 'Baloo 2', system-ui, -apple-system, sans-serif;
+  --font-body: 'Baloo 2', system-ui, -apple-system, sans-serif;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink-0);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+/* The world. Everything else is layered on top of this. */
+#stage {
+  position: absolute;
+  inset: 0;
+}
+
+#stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* #ui sets pointer-events:none so the 3D world stays clickable; buttons opt
+   back in. These two declarations clash with nothing, so an ID is fine here. */
+#ui button {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Neutralise the browser's own widget styling on buttons — but at the LOWEST
+   possible specificity. `:where()` contributes zero, so this resolves to
+   (0,0,1) and every component class still wins.
+
+   This matters more than it looks. Written as `#ui button` this rule is
+   (1,0,1), which outranks *every* class-based button rule in the file: the
+   lime PLAY button silently fell back to `color:inherit` (cream on lime,
+   effectively invisible) and `border:none` deleted the thick black outline
+   that the whole design language is built on. Keep it weak. */
+:where(#ui) button {
+  font-family: inherit;
+  border: none;
+  color: inherit;
+}
+
+/* ==========================================================================
+   Screen shell + atmosphere
+   ========================================================================== */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: calc(14px + var(--safe-t)) 16px calc(14px + var(--safe-b));
+  pointer-events: auto;
+  text-align: center;
+  overflow: hidden;
+  /* The scrim: heavy at the top and bottom for legibility, almost clear
+     through the middle so the hero and the stadium show through.
+     The cast is a floodlit night match — lime light pooling from the top,
+     green-black turf shadow rising from below. No blue, no violet. */
+  background:
+    radial-gradient(120% 58% at 50% -16%, rgba(223, 249, 2, 0.22), transparent 62%),
+    radial-gradient(70% 40% at 4% 6%, rgba(223, 249, 2, 0.1), transparent 58%),
+    radial-gradient(96% 56% at 100% 106%, rgba(30, 56, 20, 0.5), transparent 62%),
+    linear-gradient(
+      180deg,
+      rgba(5, 7, 6, 0.95) 0%,
+      rgba(5, 7, 6, 0.6) 12%,
+      rgba(5, 7, 6, 0.14) 34%,
+      rgba(5, 7, 6, 0.04) 50%,
+      rgba(5, 7, 6, 0.5) 66%,
+      rgba(5, 7, 6, 0.9) 84%,
+      rgba(5, 7, 6, 0.98) 100%
+    );
+}
+
+/* Vignette + a faint pitch-marker grid, drawn above the scrim but below the UI. */
+.screen::before,
+.screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.screen::before {
+  background: radial-gradient(120% 100% at 50% 50%, transparent 48%, rgba(0, 0, 0, 0.68) 100%);
+}
+
+.screen::after {
+  background-image:
+    linear-gradient(rgba(223, 249, 2, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(223, 249, 2, 0.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(100% 62% at 50% 42%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(100% 62% at 50% 42%, #000 0%, transparent 78%);
+  opacity: 0.55;
+}
+
+/* Every direct child of a screen sits above the scrim layers. */
+.screen > * {
+  position: relative;
+  z-index: 2;
+}
+
+.screen.squad-screen {
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.82;
+}
+
+.logo-line1,
+.logo-line2 {
+  font-family: var(--font-display);
+  font-size: clamp(46px, 17vw, 92px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+
+.logo-line1 {
+  color: var(--cream);
+  -webkit-text-stroke: 7px var(--outline);
+  paint-order: stroke fill;
+  text-shadow: 0 8px 0 rgba(0, 0, 0, 0.85);
+}
+
+/* The lime half of the wordmark is gradient-filled, so a text-stroke would be
+   painted over by the clipped background. Ring it with offset drop-shadows
+   instead — same outline, drawn outside the glyphs. */
+.logo-line2 {
+  background: linear-gradient(180deg, var(--lime-hi) 0%, var(--lime) 46%, var(--lime-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(2.5px 0 0 var(--outline)) drop-shadow(-2.5px 0 0 var(--outline))
+    drop-shadow(0 2.5px 0 var(--outline)) drop-shadow(0 -2.5px 0 var(--outline))
+    drop-shadow(0 8px 0 rgba(0, 0, 0, 0.8));
+}
+
+.tagline {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.screen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.head-text {
+  text-align: left;
+  min-width: 0;
+}
+
+.screen-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 7.4vw, 40px);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+  /* The family's headline: a thick black outline painted BEHIND the fill
+     (`paint-order`), then one hard black step. No glow, no gradient. */
+  -webkit-text-stroke: 3.5px var(--outline);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.75);
+}
+
+.screen-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   Progress ring — the 0 / 5 game HUD counter
+   ========================================================================== */
+
+.pick-ring {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+}
+
+.pick-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-track {
+  fill: rgba(9, 14, 34, 0.85);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 5;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: #ffc531;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.3s ease;
+  filter: drop-shadow(0 0 6px rgba(255, 197, 49, 0.85));
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-family: var(--font-display);
+}
+
+.ring-label b {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--cream);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.ring-label i {
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  color: var(--ink-mute);
+  align-self: flex-end;
+  margin-bottom: 5px;
+}
+
+.pick-ring.full .ring-fill {
+  stroke: #3ddc84;
+  filter: drop-shadow(0 0 10px rgba(61, 220, 132, 0.95));
+}
+
+.pick-ring.full .ring-label b {
+  color: var(--lime);
+}
+
+/* ==========================================================================
+   Chips — role filters, condition pills, tags
+   ========================================================================== */
+
+.chip-row {
+  display: flex;
+  gap: 7px;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  scrollbar-width: none;
+}
+
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline);
+  transition: transform 0.07s ease, box-shadow 0.07s ease, background 0.15s ease;
+}
+
+.chip:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.chip.active {
+  color: var(--on-lime);
+  background: var(--lime);
+  border-color: var(--outline);
+  box-shadow: 0 3px 0 var(--outline), 0 0 18px var(--lime-glow);
+}
+
+.chip .chip-n {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.72;
+}
+
+.cond {
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.cond-mini {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+
+/* ==========================================================================
+   Collectible hero cards
+   ========================================================================== */
+
+.viber-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+/* The card is a button; the quick-add control is its sibling, never nested. */
+.card-slot {
+  position: relative;
+  display: flex;
+  animation: cardRise 0.42s cubic-bezier(0.22, 1.2, 0.4, 1) both;
+  animation-delay: calc(min(var(--i, 0), 11) * 26ms);
+}
+
+.card-slot > .viber-card2 {
+  flex: 1;
+  animation: none;
+}
+
+.card-add {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--on-lime);
+  background: var(--lime);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline), 0 0 14px var(--lime-glow);
+  z-index: 7;
+  transition: transform 0.07s ease, box-shadow 0.07s ease;
+}
+
+.card-add:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+/* In the five: the control flips to a red remove. */
+.card-add.on {
+  color: #2a0606;
+  background: #ff5b5b;
+  box-shadow: 0 3px 0 var(--outline), 0 0 14px rgba(255, 91, 91, 0.6);
+}
+
+.card-add:disabled {
+  opacity: 0.32;
+  filter: saturate(0.2);
+  cursor: not-allowed;
+}
+
+.viber-card2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 9px 11px;
+  border-radius: var(--r-lg);
+  text-align: center;
+  isolation: isolate;
+  overflow: visible;
+  background:
+    radial-gradient(105% 62% at 50% 4%, var(--role-glow, rgba(255, 255, 255, 0.16)), transparent 62%),
+    var(--panel-2);
+  /* The family's card: thick black outline on a solid black offset — 4px, the
+     same weight as the reference's .charCard and .btn. */
+  border: 4px solid var(--outline);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.7);
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+  animation: cardRise 0.42s cubic-bezier(0.22, 1.2, 0.4, 1) both;
+  animation-delay: calc(min(var(--i, 0), 11) * 26ms);
+}
+
+/* Strong coloured accent across the top — the role light. */
+.viber-card2::before {
+  content: '';
+  position: absolute;
+  inset: -4px -4px auto;
+  height: 7px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: linear-gradient(90deg, var(--role, var(--lime)), rgba(255, 255, 255, 0.85));
+  box-shadow: 0 0 16px var(--role-glow, rgba(255, 255, 255, 0.4));
+  z-index: 3;
+}
+
+/* Inner floor glow under the character's feet. */
+.viber-card2::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  width: 96px;
+  height: 22px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--role-glow, rgba(255, 255, 255, 0.3)), transparent);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.viber-card2:active {
+  transform: translateY(3px) scale(0.99);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* ---- dramatic selected state: a lime frame around a lime-tinted card ---- */
+.viber-card2.selected {
+  border-color: var(--lime);
+  background:
+    radial-gradient(105% 62% at 50% 4%, var(--role-glow, rgba(255, 255, 255, 0.16)), transparent 62%),
+    rgba(223, 249, 2, 0.1);
+  transform: translateY(-5px) scale(1.035);
+  z-index: 3;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.7), 0 0 22px rgba(223, 249, 2, 0.3);
+}
+
+/* A sweep of light across a chosen card. */
+.viber-card2.selected .card-shine {
+  opacity: 1;
+  animation: shine 2.4s ease-in-out infinite;
+}
+
+.card-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.card-shine::before {
+  content: '';
+  position: absolute;
+  top: -60%;
+  left: -70%;
+  width: 46%;
+  height: 220%;
+  transform: rotate(18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+}
+
+.card-check {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 900;
+  color: #06210f;
+  background: linear-gradient(180deg, #8bf5b4, #22c55e 60%, #15803d);
+  border: 3px solid #04140a;
+  box-shadow: 0 0 18px rgba(61, 220, 132, 0.9);
+  z-index: 6;
+  animation: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pick-num {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  color: #10170a;
+  background: linear-gradient(180deg, #e8ff7a, var(--lime) 55%, var(--lime-deep));
+  border: 2.5px solid #0a0a12;
+  box-shadow: 0 0 14px var(--lime-glow);
+  z-index: 5;
+}
+
+/* ---- character art inside the card ---- */
+.card-art {
+  position: relative;
+  height: 96px;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+
+.card-art::before {
+  content: '';
+  position: absolute;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--role-glow, rgba(255, 255, 255, 0.3)), transparent 72%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.card-art .vv-avatar {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+
+.card-meta {
+  position: relative;
+  z-index: 2;
+  line-height: 1.12;
+}
+
+.card-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.card-epithet {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--ink-dim);
+}
+
+.card-role {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #06080f;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), var(--role, var(--lime)));
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* ==========================================================================
+   Rating badges
+   ========================================================================== */
+
+.ovr-badge {
+  position: absolute;
+  top: 13px;
+  left: 10px;
+  min-width: 42px;
+  padding: 4px 8px 5px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  color: #06080f;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), var(--role, var(--lime)) 42%, var(--role, var(--lime)));
+  border: 2.5px solid #07080f;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55), 0 0 16px var(--role-glow, rgba(255, 255, 255, 0.4));
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  z-index: 5;
+  animation: badgePulse 2.8s ease-in-out infinite;
+}
+
+.role-GK {
+  --role: var(--role-GK);
+  --role-glow: rgba(103, 232, 249, 0.55);
+}
+.role-DEF {
+  --role: var(--role-DEF);
+  --role-glow: rgba(74, 222, 128, 0.55);
+}
+.role-MID {
+  --role: var(--role-MID);
+  --role-glow: rgba(168, 85, 247, 0.6);
+}
+.role-FWD {
+  --role: var(--role-FWD);
+  --role-glow: rgba(255, 90, 60, 0.6);
+}
+
+/* ==========================================================================
+   Buttons — chunky game controls
+   ========================================================================== */
+
+.primary-btn,
+.ghost-btn,
+.special-btn,
+.action-btn,
+.mentality-btn,
+.pause-btn {
+  position: relative;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  border-radius: var(--r-md);
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
+    filter 0.15s ease;
+}
+
+/* The primary call to action is the brand: flat electric lime inside a thick
+   black outline, sitting on a solid black offset — the shared button of the
+   family (Viber Brawl's `.btn`). No gloss, no gradient, no blur. */
+.primary-btn {
+  padding: 14px 30px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--on-lime);
+  background: var(--lime);
+  /* 4px, matching the reference's .btn. The heavy outline is not a detail: at
+     3px the CTA stopped reading as the same object as Viber Brawl's button. */
+  border: 4px solid var(--outline);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 0 var(--outline), 0 0 24px rgba(223, 249, 2, 0.2);
+}
+
+.primary-btn:active {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.primary-btn.disabled,
+.primary-btn:disabled {
+  color: rgba(243, 230, 196, 0.32);
+  background: rgba(11, 18, 32, 0.85);
+  border-color: var(--outline);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
+  text-shadow: none;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* Secondary action: the same outline and offset, but dark and cream-on-black. */
+.ghost-btn {
+  padding: 13px 18px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: var(--cream);
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 0 var(--outline);
+}
+
+.ghost-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.ghost-btn.wide {
+  width: 100%;
+}
+
+.ghost-btn.accent {
+  color: #06131a;
+  background: linear-gradient(180deg, #a5f3fc, #22d3ee 55%, #0891b2);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 5px 0 #075985, 0 0 22px rgba(34, 211, 238, 0.45);
+}
+
+/* ==========================================================================
+   CSS mini-Viber portrait (mirrors the 3D rig so menus match the pitch)
+   ========================================================================== */
+
+.vv-avatar {
+  width: calc(46px * var(--vv-scale, 1));
+  height: calc(70px * var(--vv-scale, 1));
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.vv-inner {
+  position: relative;
+  width: 46px;
+  height: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  transform: scale(var(--vv-scale, 1));
+  transform-origin: center center;
+}
+
+.vv-avatar.ghost .vv-inner {
+  opacity: 0.74;
+}
+
+.vv-head {
+  position: relative;
+  width: 40px;
+  height: 30px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 42%), var(--vv-head);
+  border: 2.5px solid #14161a;
+  box-shadow: inset -4px -5px 0 rgba(0, 0, 0, 0.22);
+  z-index: 2;
+}
+
+.vv-brow {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 3px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.82);
+  z-index: 3;
+}
+
+.vv-face {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 7px;
+  bottom: 4px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+}
+
+.vv-eyes {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.vv-eye {
+  display: block;
+  border-radius: 2px;
+  background: var(--vv-eye);
+}
+
+.vv-face-cubes {
+  background: transparent;
+}
+.vv-face-cubes .vv-eye {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 7px var(--vv-eye);
+}
+
+.vv-face-panel {
+  background: var(--vv-face);
+  border: 2px solid #14161a;
+  top: 6px;
+  left: 5px;
+  right: 5px;
+}
+.vv-face-panel .vv-eye {
+  position: relative;
+  width: 11px;
+  height: 14px;
+  box-shadow: 0 0 8px var(--vv-eye);
+}
+.vv-face-panel .vv-pupil {
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 4px;
+  height: 5px;
+  background: var(--vv-pupil);
+}
+
+.vv-face-plate {
+  background: var(--vv-face);
+  border: 2px solid #14161a;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  right: 3px;
+}
+.vv-face-plate .vv-eye {
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 7px var(--vv-eye);
+}
+
+.vv-face-bar {
+  background: var(--vv-face);
+  border: 2px solid #14161a;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  right: 3px;
+}
+.vv-bar {
+  display: block;
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--vv-eye);
+  box-shadow: 0 0 8px var(--vv-eye);
+}
+
+.vv-body {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  margin-top: -2px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18), transparent 46%), var(--vv-body);
+  border: 2.5px solid #14161a;
+  z-index: 1;
+}
+
+.vv-plate {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--vv-accent);
+  box-shadow: 0 0 6px var(--vv-accent);
+}
+
+.vv-arm {
+  position: absolute;
+  top: -1px;
+  width: 6px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--vv-arm);
+  border: 2px solid #14161a;
+}
+.vv-arm-l {
+  left: -6px;
+}
+.vv-arm-r {
+  right: -6px;
+}
+
+.vv-pack {
+  position: absolute;
+  left: -7px;
+  top: -5px;
+  width: 6px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--vv-arm);
+  border: 2px solid #14161a;
+}
+
+.vv-tail {
+  position: absolute;
+  right: -9px;
+  top: 4px;
+  width: 8px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--vv-leg);
+  border: 2px solid #14161a;
+}
+
+.vv-belt {
+  width: 28px;
+  height: 5px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--vv-belt);
+  border: 2px solid #14161a;
+  z-index: 2;
+}
+
+.vv-legs {
+  display: flex;
+  gap: 4px;
+  margin-top: -1px;
+}
+
+.vv-leg {
+  position: relative;
+  width: 9px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--vv-leg);
+  border: 2px solid #14161a;
+}
+
+.vv-leg::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: -3px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vv-boot);
+  border: 2px solid #14161a;
+}
+
+.vv-ht {
+  position: absolute;
+  background: var(--vv-top);
+  border: 2.5px solid #14161a;
+  border-radius: 3px;
+  z-index: 4;
+}
+
+.vv-ht-flatslab {
+  top: -7px;
+  left: -3px;
+  right: -3px;
+  height: 6px;
+}
+.vv-ht-flatslab::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 8px;
+  right: 8px;
+  height: 5px;
+  background: var(--vv-top);
+  border: 2.5px solid #14161a;
+  border-radius: 3px;
+}
+
+.vv-ht-mortar {
+  top: -6px;
+  left: -4px;
+  right: -4px;
+  height: 5px;
+}
+.vv-ht-mortar::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  background: var(--vv-accent);
+  border: 2px solid #14161a;
+  border-radius: 2px;
+}
+
+.vv-ht-rods {
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 14px;
+  box-shadow: -8px 5px 0 0 var(--vv-top), 7px 2px 0 0 var(--vv-top);
+}
+
+.vv-ht-antenna {
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 13px;
+}
+.vv-ht-antenna::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vv-eye);
+  border: 2px solid #14161a;
+  box-shadow: 0 0 8px var(--vv-eye);
+}
+
+.vv-ht-ears {
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 7px;
+  height: 8px;
+  box-shadow: -11px 1px 0 0 var(--vv-top), 11px 1px 0 0 var(--vv-top);
+}
+
+.vv-ht-spikes {
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 12px;
+  box-shadow: -9px 4px 0 -1px var(--vv-top), 9px 2px 0 -1px var(--vv-top);
+}
+
+.vv-ht-block {
+  top: -8px;
+  left: 8px;
+  right: 8px;
+  height: 8px;
+}
+
+.vv-ht-wing {
+  top: -18px;
+  right: -3px;
+  width: 5px;
+  height: 34px;
+  border-radius: 3px;
+}
+
+/* ==========================================================================
+   MAIN MENU
+   The hero and the stadium show through the middle; the logo sits on the sky
+   and the PLAY button on the pitch.
+   ========================================================================== */
+
+.menu-screen {
+  justify-content: space-between;
+  gap: 0;
+  padding: calc(18px + var(--safe-t)) 18px calc(18px + var(--safe-b));
+}
+
+.menu-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.menu-crest {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 5px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: rgba(9, 14, 34, 0.72);
+  border: 3px solid var(--outline);
+  backdrop-filter: blur(6px);
+}
+
+/* The player's own club, under the wordmark, wearing the crest they picked.
+   Bigger and brighter than the little brand chip the profile screens use — this
+   line is about the player, not about us. */
+.menu-crest.club-crest {
+  margin-top: 9px;
+  padding: 4px 14px 4px 5px;
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  color: var(--cream);
+  background: rgba(9, 14, 34, 0.88);
+  box-shadow: 0 4px 0 var(--outline);
+}
+
+/* The band between the logo and the buttons is left empty on purpose. */
+.menu-spacer {
+  flex: 1;
+  min-height: 24px;
+}
+
+.menu-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.play-btn {
+  width: 100%;
+  padding: 20px 34px;
+  font-size: 30px;
+  letter-spacing: 0.1em;
+  border-radius: var(--r-lg);
+}
+
+.play-btn .play-sub {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  /* Dark ink on lime goes muddy fast — keep this well above half opacity. */
+  opacity: 0.8;
+}
+
+.menu-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.menu-opt {
+  position: relative;
+  flex: 1 1 30%;
+  max-width: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px 9px;
+  border-radius: var(--r-md);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+}
+
+.menu-opt .ico {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.menu-opt:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Every tile opens a real screen now, so they get a lime hairline along the
+   top edge — the same "this is a door, not a label" cue the cards use — while
+   still sitting well below PLAY in the hierarchy. */
+.menu-opt::before {
+  content: '';
+  position: absolute;
+  inset: 3px 3px auto;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(223, 249, 2, 0.4);
+}
+
+.menu-opt:hover::before {
+  background: var(--lime);
+}
+
+/* ==========================================================================
+   HERO SELECT — the football hero selection screen
+   ========================================================================== */
+
+/*
+ * The select screen never scrolls as a whole: the header, the hero band and
+ * the action bar stay put while only the card grid moves. That keeps the 3D
+ * hero pinned behind its band instead of drifting over the cards.
+ */
+.screen.hero-select {
+  overflow: hidden;
+  justify-content: flex-start;
+  gap: 10px;
+  padding-bottom: calc(10px + var(--safe-b));
+}
+
+.screen.hero-select .viber-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  align-content: start;
+  padding: 2px 2px 8px;
+  /* Room for the lifted, glowing selected cards to breathe. */
+  margin: -2px auto 0;
+  width: 100%;
+  scrollbar-width: none;
+}
+
+.screen.hero-select .viber-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.screen.hero-select .flow-footer {
+  flex: 0 0 auto;
+}
+
+/*
+ * Filters + card rail as one block. Portrait: it is the flexible remainder of
+ * the column, so the grid scrolls and the header/footer stay put. Landscape
+ * promotes it to its own column beside the hero (see the landscape block).
+ */
+.hero-select .hero-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  width: 100%;
+}
+
+.hero-select .hero-body .chip-row {
+  flex: 0 0 auto;
+}
+
+.hero-stage {
+  position: relative;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  /* Height is set in JS-free terms: the 3D hero is framed for this band. */
+  height: 30vh;
+  min-height: 150px;
+  max-height: 300px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* The name plate floats at the foot of the hero stage. */
+.hero-plate {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 8px;
+  border-radius: 999px;
+  max-width: 96%;
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.hero-plate .ovr-badge {
+  position: static;
+  min-width: 40px;
+  animation: none;
+}
+
+.hero-plate-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.hero-plate-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+  white-space: nowrap;
+}
+
+.hero-plate-sub {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--role, var(--ink-dim));
+}
+
+/* ==========================================================================
+   Flow footer
+   ========================================================================== */
+
+.flow-footer {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  flex: 1;
+}
+
+.flow-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 9px;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  padding-top: 8px;
+  /* A soft shelf so the buttons never sit on top of the cards. */
+  background: linear-gradient(180deg, transparent, rgba(4, 6, 15, 0.82) 42%);
+}
+
+.flow-actions .primary-btn {
+  flex: 1;
+  margin-top: 0;
+  padding: 16px 18px;
+  font-size: 15px;
+}
+
+/* ==========================================================================
+   PLAYER PROFILE — a bottom sheet with the 3D hero above it
+   ========================================================================== */
+
+.overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay-screen {
+  /*
+   * Full time and half time want the panel sitting low, over the pitch. The
+   * obvious way to do that is `justify-content: flex-end`, but on a flex
+   * container that ALSO scrolls, flex-end pushes the overflow past the scroll
+   * origin — the panel's top becomes unreachable. The result panel is taller
+   * than a 390px landscape viewport, so that meant the outcome, the score and
+   * the league note were all clipped off the top of the screen with no way to
+   * scroll to them.
+   *
+   * `margin-top: auto` on the panel gets the same "pinned low" look while
+   * leaving the top of an over-tall panel reachable.
+   */
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(4, 6, 15, 0.72) 0%,
+      rgba(4, 6, 15, 0.1) 34%,
+      rgba(4, 6, 15, 0.35) 52%,
+      rgba(4, 6, 15, 0.92) 68%
+    );
+}
+
+.overlay-screen .panel {
+  margin-top: auto;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
+/* The sheet itself. */
+.sheet {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 62vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 11px;
+  padding: 16px 18px calc(18px + var(--safe-b));
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background:
+    radial-gradient(120% 60% at 50% 0%, var(--role-glow, rgba(255, 255, 255, 0.14)), transparent 62%),
+    var(--panel-2);
+  border: 3px solid var(--outline);
+  border-bottom: none;
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.7);
+  animation: sheetUp 0.34s cubic-bezier(0.22, 1.1, 0.36, 1);
+}
+
+/* Grab handle. */
+.sheet::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 46px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 6px;
+}
+
+.sheet-id {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sheet-name {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 7vw, 30px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  line-height: 0.98;
+  color: var(--cream);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.sheet-epithet {
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--role, var(--lime));
+}
+
+.sheet-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #06080f;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), var(--role, var(--lime)));
+}
+
+.sheet-ovr {
+  flex-shrink: 0;
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 900;
+  color: #06080f;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), var(--role, var(--lime)) 46%, var(--role, var(--lime)));
+  border: 3px solid #07080f;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.55), 0 0 26px var(--role-glow, rgba(255, 255, 255, 0.4));
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* ---- attribute bars ---- */
+
+.attr-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.attr-row {
+  display: grid;
+  grid-template-columns: 74px 1fr 32px;
+  align-items: center;
+  gap: 9px;
+}
+
+.attr-k {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: left;
+  color: var(--ink-mute);
+}
+
+.attr-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(4, 7, 18, 0.85);
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.attr-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.22, 1.2, 0.4, 1);
+  box-shadow: 0 0 12px currentColor;
+}
+
+.attr-v {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
+  color: var(--cream);
+}
+
+/* ---- special move ---- */
+
+.special-box {
+  position: relative;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  text-align: left;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(223, 249, 2, 0.18), transparent 62%),
+    var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 var(--outline);
+}
+
+/* Scoped deliberately. `.special-label` is ALSO the class of the in-match
+   SPECIAL button's caption (ui/hud.ts), and while this rule was unscoped it
+   won the cascade for that child element — painting "SPECIAL" light violet on
+   a lime fill, because a matched rule on the element beats a colour inherited
+   from its parent button. Two unrelated components, one class name. */
+.special-box .special-label {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: var(--lime);
+}
+
+.special-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+  margin-top: 2px;
+}
+
+.special-desc {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+/* ==========================================================================
+   PROFILE — create a club, sign back into one, or look at your account
+   --------------------------------------------------------------------------
+   Three screens in the one language: the same flat fill, the same 3–5px black
+   outline, the same hard offset. The form is the only place in the game that
+   takes typing, so the text field is deliberately the loudest control on the
+   screen — a dark well inside a thick black frame that turns lime on focus.
+   ========================================================================== */
+
+/* The card is centred with `margin: auto`, NOT `justify-content: center`.
+   A flex-centred child that is taller than its scroll container has its top
+   pushed past the scroll origin and cannot be scrolled back to; auto margins
+   centre it when there is room and fall back to the top when there is not. */
+.profile-screen {
+  justify-content: flex-start;
+  gap: 0;
+  padding: calc(18px + var(--safe-t)) 16px calc(18px + var(--safe-b));
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.profile-card {
+  margin: auto;
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 22px 22px 20px;
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(223, 249, 2, 0.13), transparent 62%),
+    var(--panel);
+  border: 5px solid var(--outline);
+  box-shadow:
+    0 10px 0 rgba(0, 0, 0, 0.72),
+    0 0 60px rgba(223, 249, 2, 0.1),
+    inset 0 0 0 1px rgba(223, 249, 2, 0.14);
+}
+
+.profile-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  text-align: center;
+}
+
+.profile-head .screen-title {
+  font-size: clamp(22px, 6.4vw, 34px);
+}
+
+.profile-head .screen-sub {
+  max-width: 34ch;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.profile-form.narrow {
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+}
+
+.field-label {
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--lime-text);
+}
+
+/* The one control the player types into. Nothing above this file styles a
+   form element, so the browser's own widget paint has to be cleared first. */
+.text-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--cream);
+  background: rgba(6, 10, 5, 0.92);
+  border: 3px solid var(--outline);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 0 var(--outline);
+  outline: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+
+.text-input::placeholder {
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+
+.text-input:focus {
+  background: rgba(10, 16, 7, 0.98);
+  border-color: var(--lime);
+  box-shadow: 0 4px 0 var(--outline), 0 0 0 3px rgba(223, 249, 2, 0.26);
+}
+
+/* Chrome repaints an autofilled field pale yellow with dark text. The inset
+   shadow is the only hook that can cover that fill, so it has to carry the
+   focus ring as well when the two states overlap. */
+.text-input:-webkit-autofill {
+  -webkit-text-fill-color: var(--cream);
+  box-shadow: 0 4px 0 var(--outline), inset 0 0 0 100px rgba(6, 10, 5, 0.98);
+}
+
+.text-input:-webkit-autofill:focus {
+  border-color: var(--lime);
+  box-shadow:
+    0 4px 0 var(--outline),
+    0 0 0 3px rgba(223, 249, 2, 0.26),
+    inset 0 0 0 100px rgba(6, 10, 5, 0.98);
+}
+
+/* The crest the scoreboard will actually wear, updating as the club is typed. */
+.crest-preview {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: rgba(223, 249, 2, 0.08);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+}
+
+/* A holder, nothing more. The mark draws its own badge — near-black plate, faint
+   lime ring — so painting a second plate behind it would double the frame. */
+.crest-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The scoreboard abbreviation. This is the chip that used to be the badge; now
+   that the badge is the real logo, the abbreviation needs its own lime plate. */
+.crest-short {
+  flex-shrink: 0;
+  min-width: 44px;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  background: var(--lime);
+  color: var(--on-lime);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-align: center;
+}
+
+.crest-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--cream);
+}
+
+.crest-preview.big {
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.crest-preview.big .crest-short {
+  min-width: 58px;
+  padding: 7px 10px;
+  font-size: 20px;
+  border-width: 4px;
+  box-shadow: 0 5px 0 var(--outline);
+}
+
+.crest-preview.big .crest-name {
+  font-size: 15px;
+  white-space: normal;
+}
+
+/* --------------------------------------------------------------------------
+   The brand mark
+   -------------------------------------------------------------------------- */
+
+/* Every inline mark sits in one of these. `inline-flex` + a block SVG keeps it
+   from adding a baseline gap to whatever row it is dropped into. */
+.brand-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.brand-icon svg {
+  display: block;
+}
+
+/* The hero mark on the title screen: the one place the brand gets to shout. */
+.logo-mark {
+  margin-bottom: 4px;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.7));
+}
+
+/* --------------------------------------------------------------------------
+   The crest picker
+   -------------------------------------------------------------------------- */
+
+/* The crest field. It is a `.field` like every text field beside it, so it only
+   needs to widen the label-to-picker gap a touch to match the input rhythm. */
+.icon-field {
+  gap: 7px;
+}
+
+.icon-picker {
+  display: grid;
+  /* `minmax(0, 1fr)` rather than `1fr`: a bare `1fr` track has `min-width: auto`,
+     so it refuses to shrink below the widest crest and the last one in the row
+     gets pushed off the card on a 390px phone. */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+}
+
+/* Real buttons, so the tile can show the crest itself rather than a word for it. */
+.icon-choice {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 5px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 3px solid transparent;
+  box-shadow: none;
+  transition: transform 0.08s ease, background 0.12s ease;
+}
+
+/* The crest scales to the track. Sized on the holder rather than the <svg> so
+   the percentage has a definite box to resolve against — putting `width: 100%`
+   on the svg itself leaves the holder's own width circular and Chrome falls
+   back to the attribute size, which is the overflow this is fixing. */
+.icon-choice .brand-icon {
+  width: 100%;
+  max-width: 40px;
+}
+
+.icon-choice .brand-icon svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.icon-choice:active {
+  transform: translateY(2px);
+}
+
+/* The chosen crest. Lime plate behind a lime mark would erase the artwork, so
+   the selection is a ring plus a lift — the mark itself never changes colour. */
+.icon-choice.active {
+  background: rgba(223, 249, 2, 0.16);
+  border-color: var(--lime);
+  box-shadow: 0 3px 0 var(--outline), 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+/* A failed validation. Hidden by default — `.show` is the only way in. */
+.form-error {
+  display: none;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--red);
+  background: rgba(58, 12, 12, 0.94);
+  box-shadow: 0 4px 0 var(--outline);
+  color: #ffd9d9;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.form-error.show {
+  display: block;
+  animation: fieldNudge 0.3s ease;
+}
+
+.notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--outline);
+  background: rgba(223, 249, 2, 0.1);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+  color: var(--cream);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.notice.warn {
+  border-color: var(--lantern);
+  background: rgba(255, 154, 31, 0.16);
+}
+
+/* The card centres its children, so a notice laid directly inside it would
+   otherwise shrink to its text width. */
+.profile-card > .notice {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.profile-foot {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 15px;
+}
+
+.profile-submit {
+  width: 100%;
+  margin-top: 4px;
+  padding: 15px 24px;
+}
+
+.forgot-note {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+/* `.forgot-note` sets `display: flex`, and an author `display` declaration
+   always beats the user agent's `[hidden] { display: none }` — so the hidden
+   attribute has to be honoured explicitly or the panel never closes. */
+.forgot-note[hidden] {
+  display: none;
+}
+
+.ghost-btn.danger {
+  color: #ffd9d9;
+  border-color: var(--red);
+  box-shadow: 0 4px 0 var(--outline);
+}
+
+/* The second tap: the button has turned red and is asking for confirmation. */
+.ghost-btn.danger.armed {
+  color: var(--outline);
+  background: var(--red);
+  animation: badgePulse 1s ease-in-out infinite;
+}
+
+/* ---- account chip: who you are, top-right of the menu ----
+   Deliberately out of the play path — the profile is not something a player
+   should be able to hit while reaching for PLAY. Scoped past `.screen > *`,
+   which would otherwise pin it back into the flow. */
+.menu-screen > .account-chip {
+  position: absolute;
+  top: calc(12px + var(--safe-t));
+  right: calc(12px + var(--safe-r));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 44vw;
+  padding: 5px 13px 5px 5px;
+  border-radius: var(--r-pill);
+  border: 3px solid var(--outline);
+  background: rgba(9, 14, 34, 0.82);
+  box-shadow: 0 4px 0 var(--outline);
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.menu-screen > .account-chip:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.acct-initial {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2.5px solid var(--outline);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.acct-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the account sheet: the same bottom sheet, holding two facts ---- */
+.account-sheet {
+  gap: 12px;
+}
+
+.account-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.account-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 13px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--outline);
+  background: rgba(6, 10, 5, 0.75);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+}
+
+.account-key {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lime-text);
+}
+
+.account-val {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+  color: var(--cream);
+}
+
+@keyframes fieldNudge {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* ==========================================================================
+   CLUB SECTIONS — LEAGUE / SQUAD / PLAYERS / CAREER / SETTINGS
+   --------------------------------------------------------------------------
+   The five screens behind the main menu. They are reading screens, not action
+   screens, so the language shifts slightly: the same flat fill, the same 3px
+   black outline and the same hard offset, but the lime is reserved for the one
+   thing that matters on each screen — your own row in the table, your own
+   player in a list — instead of being spread over every control.
+   ========================================================================== */
+
+/* Every section is a centred column inside the scrolling screen shell. */
+.league-screen,
+.squad-view,
+.career-screen,
+.settings-screen {
+  align-items: center;
+}
+
+.league-screen > *,
+.squad-view > *,
+.career-screen > *,
+.settings-screen > *,
+.players-screen .hero-body {
+  width: 100%;
+  max-width: 720px;
+}
+
+/* A quiet line of explanation under a block of data. */
+.section-note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+/* ---- club crest: the badge the scoreboard, the table and the VS card share ---- */
+
+.club-crest {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 0 6px;
+  height: 22px;
+  min-width: 34px;
+  border-radius: 6px;
+  border: 2.5px solid var(--outline);
+  box-shadow: 0 2px 0 var(--outline);
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--on-lime);
+}
+
+.club-crest.md {
+  height: 28px;
+  min-width: 42px;
+  font-size: 11px;
+  border-width: 3px;
+  box-shadow: 0 3px 0 var(--outline);
+}
+
+/* The player's own badge gets a lime ring so it is findable at a glance in a
+   table of seven near-identical rows. */
+.club-crest.you {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* LEAGUE                                                              */
+/* ------------------------------------------------------------------ */
+
+.league-pos,
+.ovr-chip {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.league-table,
+.fixture-list {
+  width: 100%;
+  border-radius: var(--r-lg);
+  border: 4px solid var(--outline);
+  background: var(--panel);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  /*
+   * Do NOT let these shrink. `.screen.squad-screen` already scrolls, but the
+   * table is a flex child in a 390px-tall column, so by default it shrank to
+   * fit the leftover space — and because it is `overflow: hidden`, the rows
+   * past the fold were silently cut off with no way to reach them (three of
+   * seven clubs visible, four unreachable). Keeping its natural height hands
+   * the overflow to the screen, which knows how to scroll.
+   */
+  flex: 0 0 auto;
+}
+
+/* Same reasoning: the filter/tab chips were being squeezed to 24px and
+   clipping their own labels. */
+.chip-row {
+  flex: 0 0 auto;
+}
+
+.lt-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) repeat(5, 22px) 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cream);
+  border-bottom: 1px solid var(--hair-2);
+}
+
+.lt-row:last-child {
+  border-bottom: none;
+}
+
+.lt-head {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lime-text);
+  background: rgba(223, 249, 2, 0.07);
+}
+
+.lt-pos {
+  text-align: center;
+  font-weight: 900;
+  color: var(--ink-dim);
+}
+
+.lt-club {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.lt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.lt-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.lt-pts {
+  font-weight: 900;
+  color: var(--cream);
+}
+
+/* Your own row: a lime bar down the left edge and a lime wash across it. */
+.lt-you {
+  background: rgba(223, 249, 2, 0.1);
+  box-shadow: inset 4px 0 0 var(--lime);
+}
+
+.lt-you .lt-name,
+.lt-you .lt-num,
+.lt-you .lt-pos {
+  color: var(--cream);
+}
+
+.lt-you .lt-pts {
+  color: var(--lime);
+}
+
+/* ---- fixtures ---- */
+
+.fixture-row {
+  display: grid;
+  grid-template-columns: 30px 20px 42px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--hair-2);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.fixture-row:last-child {
+  border-bottom: none;
+}
+
+.fixture-row.next {
+  background: rgba(223, 249, 2, 0.1);
+  box-shadow: inset 4px 0 0 var(--lime);
+}
+
+.fixture-row.played {
+  opacity: 0.82;
+}
+
+.fx-round {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+
+.fx-venue {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  border: 2px solid var(--outline);
+}
+
+.fx-venue.home {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.fx-venue.away {
+  background: rgba(243, 230, 196, 0.16);
+  color: var(--cream);
+}
+
+.fx-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.fx-score {
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+
+.fx-score.win {
+  color: var(--lime);
+}
+
+.fx-score.loss {
+  color: var(--red);
+}
+
+.fx-score.draw {
+  color: var(--cream);
+}
+
+.fx-score.is-next {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+
+/* ------------------------------------------------------------------ */
+/* SQUAD                                                               */
+/* ------------------------------------------------------------------ */
+
+.squad-pitch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--r-lg);
+  border: 4px solid var(--outline);
+  /* A hint of a pitch: lime light from the top, turf shadow below. */
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(223, 249, 2, 0.12), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.7);
+}
+
+.squad-slot {
+  flex: 1 1 96px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.squad-slot-role {
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lime-text);
+}
+
+.squad-card,
+.squad-empty {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 5px 7px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+  background: rgba(6, 10, 5, 0.75);
+  color: var(--cream);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.squad-card:active,
+.squad-empty:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+/* The position tint, so a five reads as a shape at a glance. */
+.squad-card.role-GK {
+  background: linear-gradient(180deg, rgba(103, 232, 249, 0.16), rgba(6, 10, 5, 0.8));
+}
+.squad-card.role-DEF {
+  background: linear-gradient(180deg, rgba(74, 222, 128, 0.16), rgba(6, 10, 5, 0.8));
+}
+.squad-card.role-MID {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.16), rgba(6, 10, 5, 0.8));
+}
+.squad-card.role-FWD {
+  background: linear-gradient(180deg, rgba(255, 90, 60, 0.16), rgba(6, 10, 5, 0.8));
+}
+
+/* The badge is the full-size hero badge by default (42px wide, 19px type);
+   on a squad card it shrinks to a corner pip. `left: auto` is required — the
+   base rule pins it to the left edge. */
+.squad-card .ovr-badge {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  left: auto;
+  min-width: 26px;
+  padding: 2px 5px 3px;
+  font-size: 12px;
+  border-width: 2.5px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: none;
+}
+
+.squad-card-name {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.squad-card-epithet {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--ink-mute);
+}
+
+.squad-empty {
+  justify-content: center;
+  gap: 3px;
+  min-height: 104px;
+  border-style: dashed;
+  border-color: rgba(223, 249, 2, 0.4);
+  color: var(--ink-mute);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.squad-empty-plus {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--lime);
+}
+
+.squad-balance {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.balance-pill {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 2.5px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--on-lime);
+}
+
+.balance-pill.role-GK {
+  background: var(--role-GK);
+}
+.balance-pill.role-DEF {
+  background: var(--role-DEF);
+}
+.balance-pill.role-MID {
+  background: var(--role-MID);
+  color: var(--cream);
+}
+.balance-pill.role-FWD {
+  background: var(--role-FWD);
+  color: var(--cream);
+}
+
+.balance-pill.empty {
+  background: transparent;
+  color: var(--ink-mute);
+  border-color: rgba(243, 230, 196, 0.25);
+}
+
+/* ------------------------------------------------------------------ */
+/* PLAYERS                                                             */
+/* ------------------------------------------------------------------ */
+
+.players-screen .sort-row {
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* CAREER                                                              */
+/* ------------------------------------------------------------------ */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 7px;
+  width: 100%;
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 9px 6px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--outline);
+  background: var(--panel);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.6);
+}
+
+.stat-num {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--lime);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.career-panel {
+  width: 100%;
+  gap: 8px;
+}
+
+.form-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.form-pill {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.form-pill.w {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+.form-pill.d {
+  background: rgba(243, 230, 196, 0.22);
+  color: var(--cream);
+}
+.form-pill.l {
+  background: var(--red);
+  color: #2a0a0a;
+}
+
+.form-empty {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-mute);
+}
+
+.best-score {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--cream);
+  -webkit-text-stroke: 3px var(--outline);
+  paint-order: stroke fill;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 34px 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  border: 2.5px solid var(--outline);
+  background: rgba(6, 10, 5, 0.7);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.history-row.champion {
+  background: rgba(223, 249, 2, 0.14);
+  border-color: var(--lime);
+}
+
+.history-season {
+  font-family: var(--font-display);
+  font-weight: 900;
+  color: var(--lime);
+}
+
+.history-pos {
+  font-weight: 900;
+}
+
+.history-record {
+  color: var(--ink-dim);
+}
+
+.history-pts {
+  text-align: right;
+  font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ */
+/* SETTINGS                                                            */
+/* ------------------------------------------------------------------ */
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--r-lg);
+  border: 4px solid var(--outline);
+  background: var(--panel);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.7);
+}
+
+.settings-group-title {
+  margin: 0 0 1px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lime-text);
+}
+
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--hair-2);
+}
+
+.setting-row:first-of-type {
+  border-top: none;
+}
+
+.setting-text {
+  flex: 1 1 190px;
+  min-width: 0;
+  text-align: left;
+}
+
+.setting-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--cream);
+}
+
+.setting-help {
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-mute);
+}
+
+/* A segmented pick-one control. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  border: 3px solid var(--outline);
+  background: rgba(6, 10, 5, 0.75);
+}
+
+.seg-btn {
+  padding: 7px 11px;
+  border-radius: 7px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: transparent;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.seg-btn:hover {
+  color: var(--cream);
+}
+
+.seg-btn.active {
+  color: var(--on-lime);
+  background: var(--lime);
+  box-shadow: 0 2px 0 var(--outline);
+}
+
+.settings-info {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.settings-info-row {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 2.5px solid var(--outline);
+  background: rgba(6, 10, 5, 0.6);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+
+/* Where the result leaves the season. */
+.result-note {
+  margin: 2px 0 0;
+  padding: 7px 12px;
+  border-radius: var(--r-pill);
+  border: 2.5px solid var(--lime);
+  background: rgba(223, 249, 2, 0.12);
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--lime);
+}
+
+/* ==========================================================================
+   VENUE picker — choosing a stadium, not a website grid
+   ========================================================================== */
+
+.venue-screen {
+  gap: 14px;
+}
+
+/* The featured ground: artwork first, name plate laid over it. */
+.venue-stage {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  flex: 0 0 auto;
+}
+
+.venue-scene {
+  position: relative;
+  /* An explicit height, not an aspect ratio: the name plate sits *inside* the
+     artwork, so the box must always be tall enough to hold it. */
+  height: clamp(170px, 36vh, 300px);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  border: 3px solid var(--outline);
+  box-shadow: var(--sh-lift), 0 0 0 1px rgba(0, 0, 0, 0.6);
+  background: var(--ink-0);
+}
+
+.venue-scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Legibility scrim over the artwork, then the plate. */
+.venue-plate {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 26px 14px 11px;
+  text-align: left;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(5, 7, 6, 0.5) 34%,
+    rgba(5, 7, 6, 0.9) 100%
+  );
+}
+
+.venue-plate-text {
+  min-width: 0;
+}
+
+.venue-city {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lime);
+  text-shadow: 0 0 12px var(--lime-glow);
+}
+
+.venue-name {
+  margin-top: 1px;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 5.2vw, 30px);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--cream);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.65);
+}
+
+.venue-blurb {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.28;
+  color: var(--ink-dim);
+  max-width: 46ch;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.venue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.venue-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #050706;
+  background: linear-gradient(180deg, #ffffff, var(--lime));
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Each condition keeps its own tint so the four grounds are distinguishable. */
+.venue-chip.cond-rain,
+.venue-thumb-cond.cond-rain {
+  background: linear-gradient(180deg, #cfe6ff, #7fb3e8);
+}
+.venue-chip.cond-ice,
+.venue-thumb-cond.cond-ice {
+  background: linear-gradient(180deg, #eaf9ff, #93cfe8);
+}
+.venue-chip.cond-cold,
+.venue-thumb-cond.cond-cold {
+  background: linear-gradient(180deg, #dfe6ef, #a3b2c4);
+}
+.venue-chip.cond-sun,
+.venue-thumb-cond.cond-sun {
+  background: linear-gradient(180deg, #fff2c4, var(--gold));
+}
+
+.diff-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.diff-k {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.diff-pips {
+  display: flex;
+  gap: 4px;
+}
+
+.diff-pip {
+  width: 16px;
+  height: 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.diff-pip.on {
+  background: linear-gradient(180deg, var(--lime-hi), var(--lime));
+  box-shadow: 0 0 10px var(--lime-glow);
+}
+
+/* The rail: pick a ground by its picture. */
+.venue-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.venue-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 0 9px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  text-align: left;
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 -1px rgba(0, 0, 0, 0.6), 0 10px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.14s ease;
+}
+
+.venue-thumb-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  overflow: hidden;
+}
+
+.venue-thumb-name {
+  padding: 0 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  line-height: 1.15;
+}
+
+.venue-thumb-cond {
+  align-self: flex-start;
+  margin: 0 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #050706;
+  background: linear-gradient(180deg, #ffffff, var(--lime));
+}
+
+.venue-thumb:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 -1px rgba(0, 0, 0, 0.6);
+}
+
+.venue-thumb.active {
+  border-color: var(--lime);
+  box-shadow: 0 5px 0 -1px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--lime), 0 0 28px var(--lime-glow);
+}
+
+.venue-thumb.active .venue-thumb-name {
+  color: var(--cream);
+}
+
+/* ==========================================================================
+   BACK button — one control, one place, one size
+   ========================================================================== */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 10px 16px 10px 12px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: rgba(11, 18, 32, 0.9);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+  transition: transform 0.07s ease, box-shadow 0.07s ease;
+}
+
+.back-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.back-chev {
+  font-size: 17px;
+  line-height: 0.8;
+  color: var(--lime);
+}
+
+/* The bottom-sheet variant spans the sheet. */
+.back-btn.wide {
+  width: 100%;
+  justify-content: center;
+  padding: 14px 16px;
+  font-size: 12px;
+}
+
+.head-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+
+/* ==========================================================================
+   CHOICE buttons (match length, half-time mentality)
+   ========================================================================== */
+
+.choice-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.length-row {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* A penalty choice must fit three real touch targets even on a narrow phone. */
+.dive-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dive-btn { min-width: 0; padding: 12px 8px; text-align: center; align-items: center; }
+.dive-btn .choice-label { font-size: clamp(13px, 3.5vw, 17px); white-space: nowrap; }
+.dive-btn .choice-hint { font-size: 10px; line-height: 1.2; }
+.penalty-panel { width: min(540px, 100%); }
+.penalty-hint { margin: 10px 0 0; text-align: center; font-size: 11px; color: var(--cream); opacity: 0.8; }
+
+.choice-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 13px;
+  border-radius: var(--r-lg);
+  text-align: left;
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+  transition:
+    transform 0.07s ease,
+    box-shadow 0.07s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.choice-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+/* Selected: a lime border plus the family's INSET lime outline, which reads as
+   a lit frame rather than a soft outer glow. */
+.choice-btn.active {
+  border-color: var(--lime);
+  background: rgba(223, 249, 2, 0.1);
+  outline: 4px solid var(--lime);
+  outline-offset: -8px;
+  box-shadow: 0 4px 0 var(--outline), 0 0 22px rgba(223, 249, 2, 0.3);
+}
+
+.choice-label {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+}
+
+.choice-hint {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+
+/* ==========================================================================
+   OPPONENT reveal — VS
+   ========================================================================== */
+
+.vs-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 780px;
+  margin: 6px auto;
+}
+
+.vs-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 15px 9px 13px;
+  border-radius: var(--r-lg);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  border-top: 6px solid var(--accent, var(--lime));
+  box-shadow: var(--sh-lift);
+}
+
+.vs-badge {
+  padding: 4px 12px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--outline);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.vs-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--cream);
+}
+
+.vs-ovr {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--lime);
+}
+
+.vs-avatars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.vs-mid {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--lime);
+  text-shadow:
+    0 0 18px var(--lime-glow),
+    0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.conditions-strip {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Panels — half-time and full-time
+   ========================================================================== */
+
+.panel {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px;
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(223, 249, 2, 0.16), transparent 62%),
+    var(--panel-2);
+  /* The reference's .panel verbatim: a 5px frame (one step heavier than any
+     button), a 10px hard offset, and the signature 1px INSET lime hairline
+     that makes the surface read as lit glass rather than a flat rectangle. */
+  border: 5px solid var(--outline);
+  box-shadow:
+    0 10px 0 rgba(0, 0, 0, 0.72),
+    0 0 60px rgba(223, 249, 2, 0.1),
+    inset 0 0 0 1px rgba(223, 249, 2, 0.14);
+}
+
+.panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 8vw, 38px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--cream);
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.panel-title.win {
+  background: linear-gradient(180deg, #f2ffb8, var(--lime) 60%, var(--lime-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 rgba(38, 48, 0, 0.6)) drop-shadow(0 0 22px var(--lime-glow));
+}
+
+.panel-title.defeat {
+  background: linear-gradient(180deg, #ffb0b0, #ef4444 60%, #991b1b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 rgba(60, 0, 0, 0.6)) drop-shadow(0 0 22px rgba(255, 70, 70, 0.5));
+}
+
+/* A draw is neither a win nor a defeat: neutral steel, not a third brand colour. */
+.panel-title.draw {
+  background: linear-gradient(180deg, #eef3ea, #a8b7a2 60%, #5d6b57);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 rgba(24, 30, 22, 0.6)) drop-shadow(0 0 22px rgba(180, 200, 170, 0.4));
+}
+
+.panel-sub {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+
+.big-score {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 10vw, 46px);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--cream);
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.stats-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  align-items: center;
+  padding: 8px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}
+
+.stats-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.stats-row.head {
+  background: transparent;
+  color: var(--ink-mute);
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stats-row .v {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.stats-row .v:last-child {
+  text-align: right;
+}
+
+.stats-row .k {
+  text-align: center;
+  color: var(--ink-mute);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dev-note {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--lime);
+  text-align: center;
+}
+
+/* ==========================================================================
+   IN-MATCH HUD — game furniture, not a dashboard
+   ========================================================================== */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(10px + var(--safe-t)) calc(12px + var(--safe-r))
+    calc(12px + var(--safe-b)) calc(12px + var(--safe-l));
+  transition: opacity 0.2s ease;
+}
+
+.hud.hidden {
+  opacity: 0;
+}
+
+.hud-top-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scoreboard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 18px;
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.6), 0 12px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(223, 249, 2, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.scoreboard .team {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 12px currentColor;
+}
+
+/* The human's five are always lime. The CPU is always warm. */
+.scoreboard .team.home {
+  color: var(--lime);
+}
+
+.scoreboard .team.away {
+  color: var(--own-cpu);
+}
+
+.scoreboard .score {
+  min-width: 62px;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 900;
+  text-align: center;
+  color: var(--cream);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.clock-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 6px 13px;
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(223, 249, 2, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.clock {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--lime);
+  text-shadow: 0 0 14px var(--lime-glow);
+}
+
+.half {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* The track is the CPU's share (warm), the fill is ours (lime). */
+.possession {
+  height: 8px;
+  margin: 9px 3px 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 138, 47, 0.85), rgba(255, 59, 92, 0.7));
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.poss-bar {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, var(--lime-deep), var(--lime));
+  box-shadow: 0 0 14px var(--lime-glow);
+  transition: width 0.4s ease;
+}
+
+/* The announcement banner is an OVERLAY, not a flex row.
+   Left in the flow it reserved ~69px of height even at opacity:0 — opacity
+   hides a box, it does not remove it — which pushed the entire bottom control
+   bar 38px below the bottom of a 390px landscape viewport. Absolutely
+   positioned, it costs no layout height until it actually shows. */
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  padding: 11px 30px;
+  border-radius: var(--r-md);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: var(--panel-2);
+  border: 4px solid var(--outline);
+  box-shadow: 0 6px 0 var(--outline), 0 16px 30px rgba(0, 0, 0, 0.65);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.banner.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* A goal is the brand's biggest moment: flat lime in a black frame. */
+.banner.goal {
+  color: var(--on-lime);
+  background: var(--lime);
+  border-color: var(--outline);
+  font-size: 34px;
+  box-shadow: 0 7px 0 var(--outline), 0 0 46px var(--lime-glow);
+  /* Sit above the celebration, not on top of it. The camera pushes in on the
+     scoring side while this is up, and dead centre is exactly where they are. */
+  top: 30%;
+}
+
+.banner.special {
+  color: var(--on-lime);
+  background: var(--lime);
+  border-color: var(--outline);
+  box-shadow: 0 7px 0 var(--outline), 0 0 40px var(--lime-glow);
+}
+
+/* A set piece is a neutral pause, not a brand moment — the family's cyan. */
+.banner.setpiece {
+  color: var(--on-lime);
+  background: var(--pink);
+  border-color: var(--outline);
+  font-size: 21px;
+  box-shadow: 0 6px 0 var(--outline), 0 0 28px rgba(92, 255, 231, 0.55);
+}
+
+/* Dead-ball indicator: which restart is being set up, and for whom. */
+/* Same story as .banner: a transient dead-ball chip that must not hold a row
+   open in the HUD column. Pinned just under the possession bar instead. */
+.setpiece-chip {
+  position: absolute;
+  left: 50%;
+  top: calc(80px + var(--safe-t));
+  padding: 5px 17px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--on-lime);
+  background: var(--lime);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline), 0 0 22px var(--lime-glow);
+  opacity: 0;
+  transform: translateX(-50%) translateY(-5px) scale(0.94);
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.setpiece-chip.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* A penalty is a warning, not a brand moment — it keeps the red. */
+.setpiece-chip.penalty {
+  color: var(--cream);
+  background: linear-gradient(180deg, #ff8a8a, #e23b3b 52%, #991b1b);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 0 rgba(90, 0, 0, 0.6), 0 0 24px rgba(255, 70, 70, 0.75);
+}
+
+.hud-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mentality-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.mentality-btn {
+  padding: 12px 4px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.6);
+}
+
+.mentality-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* The active tactical instruction must be unmistakable: flat lime, black frame. */
+.mentality-btn.active {
+  color: var(--on-lime);
+  background: var(--lime);
+  border-color: var(--outline);
+  box-shadow: 0 4px 0 var(--outline), 0 0 26px var(--lime-glow);
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 58px;
+  align-items: center;
+}
+
+/* The row keeps its height when nothing is on, but says nothing. Explaining
+   "no action needed" was noise on a control panel. */
+.action-row.empty {
+  opacity: 0;
+}
+
+.action-btn {
+  flex: 1;
+  max-width: 158px;
+  padding: 17px 10px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--cream);
+  border: 3px solid var(--outline);
+  border-radius: var(--r-md);
+  animation: pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.action-btn:active {
+  transform: translateY(4px);
+}
+
+/* Shooting is the one action that keeps a hot colour — it is the moment. */
+.action-btn.shoot {
+  background: linear-gradient(180deg, #ff8080, #e23b3b 55%, #991b1b);
+  box-shadow: 0 6px 0 #6b1010, 0 0 24px rgba(226, 59, 59, 0.6);
+}
+
+/* Passing is the brand action. */
+.action-btn.pass {
+  color: var(--on-lime);
+  background: var(--lime);
+  border-color: var(--outline);
+  box-shadow: 0 6px 0 var(--outline), 0 0 26px var(--lime-glow);
+}
+
+.action-btn.clear {
+  background: linear-gradient(180deg, #3a4433, #232c1e 55%, #161d13);
+  border-color: rgba(223, 249, 2, 0.25);
+  box-shadow: 0 6px 0 #0b0f08;
+}
+
+.controls-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   SPECIAL — a premium charged ability, not a purple website button.
+   Ready: lime, lit, breathing. Charging: dark, drained, with a fill bar.
+   -------------------------------------------------------------------------- */
+.special-btn {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  padding: 15px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  color: var(--on-lime);
+  border-radius: var(--r-md);
+  background: var(--lime);
+  border: 4px solid var(--outline);
+  box-shadow: 0 6px 0 var(--outline), 0 0 30px var(--lime-glow);
+}
+
+.special-btn:active {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+/* Charging / cooling down: drained, no glow, a fill bar creeping back. */
+.special-btn.charging {
+  color: var(--ink-mute);
+  background: var(--panel-2);
+  border-color: var(--outline);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.6);
+  filter: none;
+  animation: none;
+}
+
+/* The charge fill. Width is driven inline from the cooldown fraction. */
+.special-btn .charge {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(180deg, rgba(223, 249, 2, 0.34), rgba(223, 249, 2, 0.16));
+  transition: width 0.18s linear;
+  pointer-events: none;
+}
+
+.special-btn .special-label {
+  position: relative;
+  z-index: 1;
+}
+
+.special-btn:disabled {
+  cursor: default;
+}
+
+/* The flash when the ability fires. */
+.special-btn.firing {
+  animation: specialFire 0.55s ease-out;
+}
+
+.special-btn.ready {
+  animation: readyPulse 0.7s ease-in-out infinite alternate;
+}
+
+.pause-btn,
+.sound-btn {
+  width: 62px;
+  font-size: 15px;
+  color: var(--ink-dim);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 var(--outline);
+}
+
+.pause-btn:active,
+.sound-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* The note is 19px because a musical note glyph carries far less ink than the
+   pause bars at the same size, and the two buttons sit side by side. */
+.sound-btn {
+  font-size: 19px;
+  line-height: 1;
+}
+
+/* Muted is the SAME glyph struck through, never a second glyph: swapping the
+   character would change the button's intrinsic width and shift the row. */
+.sound-btn.muted {
+  color: var(--ink-faint, var(--ink-dim));
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   Animation
+   ========================================================================== */
+
+@keyframes cardRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(0);
+  }
+  55%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(24%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.88);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes readyPulse {
+  to {
+    box-shadow: 0 6px 0 #4d6600, 0 0 0 7px rgba(223, 249, 2, 0.3), 0 0 38px rgba(223, 249, 2, 0.9);
+  }
+}
+
+/* The burst when SPECIAL fires. */
+@keyframes specialFire {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  22% {
+    transform: scale(1.07);
+    filter: brightness(2.1);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Ambient background movement — the atmosphere never sits completely still. */
+@media (prefers-reduced-motion: no-preference) {
+  .screen {
+    animation: ambient 16s ease-in-out infinite alternate;
+  }
+  .hero-plate {
+    animation: floaty 3.6s ease-in-out infinite;
+  }
+  .logo {
+    animation: floaty 5.2s ease-in-out infinite;
+  }
+}
+
+@keyframes ambient {
+  from {
+    background-position: 0% 0%, 0% 0%, 0% 0%, 0 0;
+  }
+  to {
+    background-position: 0% 0%, 6% 4%, -6% -4%, 0 0;
+  }
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* The hero plate is centred, so it needs its own float that keeps the X. */
+.hero-plate {
+  animation-name: floatyCentred;
+}
+
+@keyframes floatyCentred {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, -5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ==========================================================================
+   Responsive — mobile first, adapted rather than shrunk
+   ========================================================================== */
+
+/* Small phones: tighten the cards and give the grid a hand. */
+@media (max-width: 380px) {
+  .viber-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .card-art {
+    height: 86px;
+  }
+  .hero-stage {
+    height: 26vh;
+    min-height: 128px;
+  }
+  .attr-row {
+    grid-template-columns: 64px 1fr 28px;
+  }
+  .menu-options {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Phones: two columns, comfortable touch targets. */
+@media (max-width: 560px) {
+  .viber-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .sheet {
+    max-height: 66vh;
+  }
+}
+
+/* Tablets: more cards per row and a roomier hero. */
+@media (min-width: 700px) {
+  .viber-grid {
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 14px;
+  }
+  .hero-stage {
+    height: 34vh;
+    max-height: 340px;
+  }
+  .weather-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .menu-bottom {
+    max-width: 520px;
+  }
+}
+
+/* Desktop: keep the game in a phone-ish column so it never reads as a website. */
+@media (min-width: 1024px) and (min-height: 700px) {
+  .screen {
+    padding-left: max(16px, calc((100vw - 1080px) / 2));
+    padding-right: max(16px, calc((100vw - 1080px) / 2));
+  }
+  .hero-stage {
+    height: 30vh;
+  }
+  .viber-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+/* Landscape phones: the hero band shrinks and the HUD tightens up. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .hero-stage {
+    height: 34vh;
+    min-height: 104px;
+  }
+  .screen-title {
+    font-size: clamp(20px, 4.6vw, 30px);
+  }
+  .logo-line1,
+  .logo-line2 {
+    font-size: clamp(30px, 7vw, 50px);
+  }
+  /* 64px of mark plus two lines of wordmark is most of a 390px-tall viewport. */
+  .logo-mark {
+    margin-bottom: 0;
+  }
+  .logo-mark svg {
+    width: 40px;
+    height: 40px;
+  }
+  .menu-crest.club-crest {
+    margin-top: 5px;
+  }
+  .hud-bottom {
+    gap: 6px;
+  }
+  .mentality-btn {
+    padding: 9px 4px;
+  }
+  .action-btn {
+    padding: 12px 10px;
+  }
+  .sheet {
+    max-height: 78vh;
+  }
+  .viber-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .card-art {
+    height: 80px;
+  }
+
+  /* --- Opponent VS card: header + two tall team blocks + conditions + CTA is
+         ~31px taller than a 390px landscape viewport, so the screen's centred
+         column clips a little at both ends. Tighten the card, never the CTA. */
+  .vs-row {
+    margin: 2px auto;
+  }
+  .vs-side {
+    gap: 4px;
+    padding: 10px 9px 9px;
+  }
+  .vs-badge {
+    padding: 3px 11px;
+    font-size: 12px;
+  }
+  .vs-name {
+    font-size: 11px;
+  }
+  .vs-ovr {
+    font-size: 10px;
+  }
+  .vs-avatars {
+    margin-top: 0;
+  }
+
+  /* --- Main menu: give the hero a real band between logo and button --- */
+  .menu-screen {
+    padding: calc(9px + var(--safe-t)) 16px calc(9px + var(--safe-b));
+  }
+  .menu-top {
+    gap: 1px;
+  }
+  .menu-crest {
+    padding: 3px 10px 3px 4px;
+    font-size: 9px;
+  }
+  .tagline {
+    display: none;
+  }
+  .menu-spacer {
+    min-height: 76px;
+  }
+  .menu-bottom {
+    gap: 7px;
+    max-width: 560px;
+  }
+  .play-btn {
+    padding: 11px 24px;
+    font-size: 21px;
+    border-radius: var(--r-md);
+  }
+  .play-btn .play-sub {
+    font-size: 8.5px;
+    margin-top: 1px;
+  }
+  /* The five "Soon" tiles become one row so they stop eating the hero band. */
+  .menu-options {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .menu-opt {
+    flex: 1 1 0;
+    max-width: none;
+    padding: 7px 3px 6px;
+    gap: 2px;
+    font-size: 8.5px;
+  }
+  .menu-opt .ico {
+    font-size: 15px;
+  }
+
+  /* --- Hero select: two columns, the way a handheld sports game does it.
+         Stacked in a 390px-tall viewport the card rail is left ~90px and every
+         card clips; side by side the hero owns the left column and the rail
+         gets the full height between the header and the footer. --- */
+  .screen.hero-select {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head  head'
+      'stage body'
+      'foot  foot';
+    /* `.screen` centres its flex children; grid children must fill their areas. */
+    align-content: stretch;
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 6px 12px;
+    overflow: hidden;
+  }
+  .hero-select .screen-head {
+    grid-area: head;
+  }
+  /* The subtitle is the first thing to go when the viewport is this short. */
+  .hero-select .screen-sub {
+    display: none;
+  }
+  .hero-select .hero-stage {
+    grid-area: stage;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .hero-select .hero-body {
+    grid-area: body;
+    gap: 6px;
+  }
+  .hero-select .flow-footer {
+    grid-area: foot;
+    padding-top: 0;
+  }
+
+  .hero-select .chip-row {
+    gap: 6px;
+  }
+  .hero-select .chip {
+    padding: 5px 10px;
+    font-size: 9.5px;
+  }
+
+  /*
+   * A horizontal rail. NOTE: this must out-specify the base rule
+   * `.screen.hero-select .viber-grid`, which sets `overflow-x: hidden`; at
+   * equal specificity this later rule wins, at lower specificity the rail
+   * would be clipped instead of scrolled.
+   */
+  .screen.hero-select .viber-grid {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    align-content: normal;
+    gap: 8px;
+    margin: 0;
+    width: 100%;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px 8px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .screen.hero-select .viber-grid::-webkit-scrollbar {
+    display: none;
+  }
+  .hero-select .card-slot {
+    flex: 0 0 118px;
+    scroll-snap-align: start;
+  }
+  .hero-select .viber-card2 {
+    padding: 10px 7px 8px;
+    gap: 3px;
+  }
+  .hero-select .card-art {
+    height: 72px;
+  }
+  .hero-select .card-art::before {
+    width: 80px;
+    height: 80px;
+  }
+  .hero-select .viber-card2::after {
+    bottom: 36px;
+    width: 74px;
+    height: 15px;
+  }
+  .hero-select .card-name {
+    font-size: 12px;
+  }
+  .hero-select .card-epithet {
+    font-size: 8.5px;
+  }
+  .hero-select .card-role {
+    margin-top: 3px;
+    padding: 2px 7px;
+    font-size: 8px;
+  }
+  .hero-select .card-add {
+    width: 26px;
+    height: 26px;
+    font-size: 15px;
+  }
+
+  /* --- Venue picker: preview left, venue list right.
+         Stacked, the three bands (artwork, rail, CTA) total ~450px in a 390px
+         viewport: the sticky CTA rides up over the rail, and `slice` crops the
+         artwork so hard that only the crowd survives — the goal is behind the
+         name plate. Side by side the preview is nearly square-on and the whole
+         ground is legible. --- */
+  .screen.venue-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.8fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head  head'
+      'scene rail'
+      'foot  foot';
+    align-content: stretch;
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 6px 12px;
+    overflow: hidden;
+  }
+  .venue-screen .screen-head {
+    grid-area: head;
+  }
+  .venue-screen .screen-sub {
+    display: none;
+  }
+  .venue-screen .venue-stage {
+    grid-area: scene;
+    display: flex;
+    max-width: none;
+    min-height: 0;
+  }
+  /* Height comes from the grid row, not from a vh guess. */
+  .venue-screen .venue-scene {
+    flex: 1 1 auto;
+    height: auto;
+    border-radius: var(--r-lg);
+  }
+  .venue-screen .venue-plate {
+    padding: 20px 11px 8px;
+  }
+  .venue-screen .venue-blurb {
+    -webkit-line-clamp: 1;
+  }
+
+  /* The rail turns into a vertical list of compact rows. */
+  .venue-screen .venue-rail {
+    grid-area: rail;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: none;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .venue-screen .venue-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .venue-screen .venue-thumb {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+  }
+  .venue-screen .venue-thumb-scene {
+    flex: 0 0 52px;
+    width: 52px;
+    aspect-ratio: 4 / 3;
+    border-radius: 6px;
+  }
+  .venue-screen .venue-thumb-name {
+    padding: 0;
+    font-size: 10px;
+  }
+  .venue-screen .venue-thumb-cond {
+    display: none;
+  }
+
+  /* The CTA is a grid row now, so it no longer needs to be sticky. */
+  .venue-screen .flow-footer {
+    display: none;
+  }
+  .venue-screen .flow-actions {
+    grid-area: foot;
+    position: static;
+    padding-top: 0;
+    background: none;
+  }
+}
+
+/* Landscape phones: the onboarding form is five stacked fields plus a header,
+   a crest preview and a footer — taller than a 390px viewport, so it would
+   scroll. Two columns of fields fits it without one. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .profile-screen {
+    padding: calc(8px + var(--safe-t)) 16px calc(8px + var(--safe-b));
+  }
+  .profile-card {
+    width: min(660px, 100%);
+    padding: 12px 18px 10px;
+    border-width: 4px;
+    box-shadow:
+      0 8px 0 rgba(0, 0, 0, 0.72),
+      0 0 60px rgba(223, 249, 2, 0.1);
+  }
+  .profile-head {
+    gap: 4px;
+  }
+  .profile-head .menu-crest {
+    padding: 3px 10px 3px 4px;
+    font-size: 9px;
+  }
+  .profile-head .menu-crest .brand-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+  .profile-head .screen-title {
+    font-size: clamp(18px, 3.4vw, 26px);
+  }
+  /* The explanation goes first when the viewport is this short; the labels
+     still say what every field is. */
+  .profile-head .screen-sub {
+    display: none;
+  }
+  .profile-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px 12px;
+    margin-top: 9px;
+  }
+  .profile-form .crest-preview,
+  .profile-form .icon-field,
+  .profile-form .form-error,
+  .profile-form .profile-submit {
+    grid-column: 1 / -1;
+  }
+  .profile-form.narrow {
+    max-width: 460px;
+    grid-template-columns: 1fr;
+  }
+  .field-label {
+    font-size: 8.5px;
+  }
+  .text-input {
+    padding: 8px 11px;
+    font-size: 14px;
+    box-shadow: 0 3px 0 var(--outline);
+  }
+  .text-input:focus {
+    box-shadow: 0 3px 0 var(--outline), 0 0 0 3px rgba(223, 249, 2, 0.26);
+  }
+  .crest-preview {
+    padding: 6px 10px;
+  }
+  .crest-short {
+    min-width: 36px;
+    padding: 4px 6px;
+    font-size: 13px;
+  }
+  /* The picker keeps six across — a 2×3 block would push the form past the fold
+     on a 390px-tall landscape phone, and six small crests still read fine. */
+  .icon-choice {
+    padding: 3px;
+  }
+  .icon-choice .brand-icon {
+    max-width: 32px;
+  }
+  /* Stacked, the sign-in crest is ~107px of a 390px viewport for one letter
+     pair; laid on its side it costs 44px and the screen stops scrolling. */
+  .crest-preview.big {
+    flex-direction: row;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  /* The mark is sized inline; CSS wins on width/height, and the viewBox scales
+     the artwork with it. */
+  .crest-preview.big .brand-icon svg {
+    width: 44px;
+    height: 44px;
+  }
+  .crest-preview.big .crest-short {
+    min-width: 46px;
+    padding: 6px 8px;
+    font-size: 17px;
+  }
+  .crest-preview.big .crest-name {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .profile-submit {
+    padding: 10px 20px;
+    font-size: 16px;
+    box-shadow: 0 5px 0 var(--outline);
+  }
+  .profile-foot,
+  .forgot-note,
+  .profile-card > .notice {
+    margin-top: 7px;
+  }
+  .notice {
+    padding: 7px 10px;
+    font-size: 10.5px;
+  }
+  .menu-screen > .account-chip {
+    top: calc(7px + var(--safe-t));
+    right: calc(9px + var(--safe-r));
+    padding: 3px 10px 3px 3px;
+    font-size: 9.5px;
+  }
+  .acct-initial {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+  .account-sheet {
+    gap: 6px;
+  }
+  .account-sheet .sheet-name {
+    font-size: 22px;
+  }
+  .account-row {
+    padding: 5px 11px;
+  }
+}
+
+/* Landscape tablets / short desktop windows. */
+@media (orientation: landscape) and (min-height: 561px) and (max-height: 820px) {
+  .hero-stage {
+    height: 30vh;
+  }
+  .sheet {
+    max-height: 74vh;
+  }
+}
