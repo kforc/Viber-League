@@ -33,6 +33,9 @@ import {
   renderOnboarding,
   renderOpponent,
   renderPenaltyDive,
+  renderPenaltyShoot,
+  renderPause,
+  renderPauseConfirm,
   renderPlayers,
   renderResult,
   renderSettings,
@@ -101,6 +104,7 @@ type AppState =
   | 'opponent'
   | 'match'
   | 'penalty'
+  | 'paused'
   | 'halftime'
   | 'result';
 
@@ -920,9 +924,43 @@ export class Game {
 
   private togglePause(): void {
     const w = this.world;
-    if (!w || this.state !== 'match') return;
-    w.paused = !w.paused;
-    this.hud?.showBanner(w.paused ? 'PAUSED' : 'RESUMED');
+    if (!w || this.state !== 'match' || w.paused) return;
+    this.enterPauseMenu();
+  }
+
+  private enterPauseMenu(): void {
+    const w = this.world;
+    if (!w) return;
+    // Freeze the world and take the match state out of the loop's step set, so
+    // no tick can land while the menu is up. The HUD is hidden; the only way
+    // back into the match is Resume (or Quit, which abandons it).
+    w.paused = true;
+    this.state = 'paused';
+    this.hud?.setVisible(false);
+    renderPause(this.overlay, {
+      onResume: () => {
+        clear(this.overlay);
+        this.hud?.setVisible(true);
+        w.paused = false;
+        this.state = 'match';
+      },
+      onQuit: () => this.confirmQuit(),
+    });
+  }
+
+  private confirmQuit(): void {
+    const w = this.world;
+    if (!w) return;
+    renderPauseConfirm(this.overlay, {
+      onConfirm: () => {
+        // Abandon the match: no result is recorded against the fixture. Hand
+        // control back to the league hub the same way the full-time screen does.
+        clear(this.overlay);
+        this.hud = null;
+        this.nav('league', false);
+      },
+      onCancel: () => this.enterPauseMenu(),
+    });
   }
 
   private handleEvents(): void {
@@ -984,8 +1022,12 @@ export class Game {
           // Only the ones near a goal lift the crowd. Nobody rises for a throw-in
           // on the halfway line.
           if (ev.kind === 'corner' || ev.kind === 'penalty') this.crowd.excite(0.3);
-          if (ev.kind === 'penalty' && ev.team === 1 && this.state === 'match') {
-            this.enterPenaltyDive();
+          if (ev.kind === 'penalty' && this.state === 'match') {
+            // The human always plays team 0: a team-1 penalty means the CPU
+            // shoots and we defend (pick the dive); a team-0 penalty means we
+            // shoot and we pick the placement.
+            if (ev.team === 1) this.enterPenaltyDive();
+            else this.enterPenaltyShoot();
           }
           break;
         }
@@ -1023,6 +1065,23 @@ export class Game {
       w.paused = false;
       this.state = 'match';
       this.hud?.showBanner(`DIVE ${direction.toUpperCase()}`, 'special');
+    });
+  }
+
+  private enterPenaltyShoot(): void {
+    const w = this.world;
+    if (!w || w.setPiece?.kind !== 'penalty' || w.setPiece.team !== 0) return;
+    // Same pattern as the dive: the world pauses so the queued `shot` command
+    // lands before runSetPiece() strikes the ball. The CPU keeper then reads it.
+    w.paused = true;
+    this.state = 'penalty';
+    renderPenaltyShoot(this.overlay, w, (aim: DiveDirection) => {
+      if (this.state !== 'penalty') return; // one choice per penalty
+      queue(w, { type: 'shot', team: 0, value: aim });
+      clear(this.overlay);
+      w.paused = false;
+      this.state = 'match';
+      this.hud?.showBanner(`SHOOT ${aim.toUpperCase()}`, 'special');
     });
   }
 

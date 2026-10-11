@@ -1585,6 +1585,88 @@ export function renderPenaltyDive(
   root.append(wrap);
 }
 
+/** The human takes a penalty: pick the placement before the kick. */
+export function renderPenaltyShoot(
+  root: HTMLElement,
+  world: World,
+  onShoot: (direction: DiveDirection) => void,
+): void {
+  clear(root);
+  const wrap = el('div', 'screen overlay-screen penalty-screen');
+  const panel = el('div', 'panel penalty-panel');
+  panel.append(el('h2', 'panel-title', 'Take the Penalty'));
+  panel.append(el('p', 'panel-sub',
+    `${world.teams[0].name} step up. Pick where to place it — the keeper will guess.`));
+
+  const row = el('div', 'choice-row dive-row');
+  const choices: Array<{ id: DiveDirection; label: string; hint: string }> = [
+    { id: 'left', label: '↖ Left', hint: 'Low-left corner' },
+    { id: 'centre', label: '↑ Centre', hint: 'Down the middle' },
+    { id: 'right', label: 'Right ↗', hint: 'Low-right corner' },
+  ];
+  for (const c of choices) {
+    const b = el('button', 'choice-btn dive-btn');
+    b.type = 'button';
+    b.append(el('span', 'choice-label', c.label), el('span', 'choice-hint', c.hint));
+    on(b, 'click', () => onShoot(c.id));
+    row.append(b);
+  }
+  panel.append(row, el('p', 'penalty-hint',
+    'A corner beats a keeper who guesses wrong — but a centre is hardest for them to reach.'));
+  wrap.append(panel);
+  root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 8b. Pause menu                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Mid-match pause: resume, or abandon the match back to the league. */
+export function renderPause(
+  root: HTMLElement,
+  opts: { onResume: () => void; onQuit: () => void },
+): void {
+  clear(root);
+  const wrap = el('div', 'screen overlay-screen pause-screen');
+  const panel = el('div', 'panel pause-panel');
+  panel.append(el('h2', 'panel-title', 'Paused'));
+  panel.append(el('p', 'panel-sub', 'The match is frozen.'));
+  const row = el('div', 'menu-btn-row');
+  const resume = el('button', 'menu-btn primary', 'Resume');
+  resume.type = 'button';
+  on(resume, 'click', opts.onResume);
+  const quit = el('button', 'menu-btn danger', 'Quit to League');
+  quit.type = 'button';
+  on(quit, 'click', opts.onQuit);
+  row.append(resume, quit);
+  panel.append(row);
+  wrap.append(panel);
+  root.append(wrap);
+}
+
+/** Confirm abandoning the match (no result is recorded). */
+export function renderPauseConfirm(
+  root: HTMLElement,
+  opts: { onConfirm: () => void; onCancel: () => void },
+): void {
+  clear(root);
+  const wrap = el('div', 'screen overlay-screen pause-screen');
+  const panel = el('div', 'panel pause-panel');
+  panel.append(el('h2', 'panel-title', 'Quit match?'));
+  panel.append(el('p', 'panel-sub', 'The result will not be recorded. You return to the league.'));
+  const row = el('div', 'menu-btn-row');
+  const yes = el('button', 'menu-btn danger', 'Quit without saving');
+  yes.type = 'button';
+  on(yes, 'click', opts.onConfirm);
+  const no = el('button', 'menu-btn', 'Back');
+  no.type = 'button';
+  on(no, 'click', opts.onCancel);
+  row.append(yes, no);
+  panel.append(row);
+  wrap.append(panel);
+  root.append(wrap);
+}
+
 /* ------------------------------------------------------------------ */
 /* 9. Full-time                                                        */
 /* ------------------------------------------------------------------ */

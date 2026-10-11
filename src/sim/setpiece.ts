@@ -562,7 +562,11 @@ function takePenalty(w: World, sp: SetPiece, taker: Player | null): void {
   // spread. The keeper chooses a lane, not a probability: the ball is caught
   // only if it actually passes through the area the keeper reached.
   const lanes: DiveDirection[] = ['left', 'centre', 'right'];
-  const lane = lanes[w.rng.int(0, 2)];
+  // The human shooter picks their own placement; the CPU shooter is aimed by
+  // the seeded RNG. Using the command value (when present) keeps the rest of
+  // the match deterministic — the RNG is only consumed for the CPU's kick.
+  const humanShooter = sp.team === 0;
+  const lane = humanShooter && w.penaltyAim ? w.penaltyAim : lanes[w.rng.int(0, 2)];
   const laneY = lane === 'left' ? -1.35 : lane === 'right' ? 1.35 : 0;
   const spread = (0.32 + (1 - accuracy) * 1.65) * weatherMods(w.weather).shotSpread;
   const aimY = laneY + w.rng.range(-spread, spread);
@@ -584,6 +588,7 @@ function takePenalty(w: World, sp: SetPiece, taker: Player | null): void {
   w.stats.shots[sp.team] += 1;
   w.setPiece = null;
   w.penaltyDive = null;
+  w.penaltyAim = null;
   w.penaltyShot = { team: sp.team, keeper: keeper?.id ?? null, dive, elapsed: 0 };
   w.phase = 'penaltyshot';
   launch(w, sub(aim, w.ball.pos), PENALTY_SPEED, 1.6, shooter);

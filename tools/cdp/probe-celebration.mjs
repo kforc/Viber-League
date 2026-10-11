@@ -230,6 +230,43 @@ check('the app still fires its own goal banner and confetti',
 check('nothing is covering the pitch during the celebration',
   await evaluate('document.querySelectorAll(".overlay-screen").length') === 0);
 
+// The controls fade out for the celebration. Let the 0.25s transition finish
+// before reading the computed opacity.
+await sleep(450);
+const hudState = await evaluate(`(() => {
+  const hud = document.querySelector('.hud');
+  /*
+   * Effective (rendered) opacity, not the element's own. The tactical row is
+   * faded as a unit, so a child button still reports opacity 1 on its own —
+   * reading that would claim the row is visible when the whole group is
+   * transparent. Walk up and multiply, which is what the eye actually sees.
+   */
+  const opacity = (sel) => {
+    let el = document.querySelector(sel);
+    if (!el) return null;
+    let o = 1;
+    while (el && el !== document.documentElement) {
+      o *= Number(getComputedStyle(el).opacity);
+      el = el.parentElement;
+    }
+    return o;
+  };
+  return {
+    celebrating: !!hud && hud.classList.contains('celebrating'),
+    special: opacity('.special-btn'),
+    mentality: opacity('.mentality-row'),
+    actions: opacity('.action-row'),
+    sound: opacity('.sound-btn'),
+    pause: opacity('.pause-btn'),
+  };
+})()`);
+console.log('hud', JSON.stringify(hudState));
+check('the tactical controls clear the pitch for the celebration',
+  hudState.celebrating && hudState.special < 0.1 && hudState.mentality < 0.1 &&
+  hudState.actions < 0.1);
+check('sound and pause stay usable during the celebration',
+  hudState.sound > 0.9 && hudState.pause > 0.9);
+
 /*
  * Where the celebration actually lands on screen. A celebration behind the
  * centred GOAL banner is no more visible than one at the far end, so this
@@ -325,6 +362,11 @@ const resumed = await evaluate(`(() => {
 console.log('resumed', JSON.stringify(resumed));
 check('the match returns to play after the celebration',
   ['kickoff', 'play'].includes(resumed.phase));
+// One more frame so the HUD can react to the phase change, then the controls
+// must be back — the fade is for the celebration, not a permanent hiding.
+await screenshot('04-controls-back');
+check('the controls come back once the goal phase ends',
+  await evaluate('!document.querySelector(".hud").classList.contains("celebrating")'));
 
 check('the page reported no JavaScript exceptions', errors.length === 0);
 fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({

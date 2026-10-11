@@ -3275,6 +3275,39 @@ body {
 .penalty-panel { width: min(540px, 100%); }
 .penalty-hint { margin: 10px 0 0; text-align: center; font-size: 11px; color: var(--cream); opacity: 0.8; }
 
+/* Pause menu — reuses the overlay-screen scaffold; buttons stack full-width. */
+.pause-screen { justify-content: center; }
+.pause-panel { width: min(420px, 100%); text-align: center; }
+.pause-panel .panel-sub { margin-bottom: 14px; }
+.menu-btn-row { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.menu-btn {
+  position: relative;
+  padding: 15px 14px;
+  border-radius: var(--r-lg);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  color: var(--cream);
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+  transition: transform 0.07s ease, box-shadow 0.07s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.menu-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--outline); }
+.menu-btn.primary {
+  background: var(--lime);
+  color: var(--ink);
+  border-color: var(--outline);
+  box-shadow: 0 4px 0 var(--outline), 0 0 22px rgba(223, 249, 2, 0.25);
+}
+.menu-btn.danger {
+  background: rgba(120, 20, 24, 0.9);
+  border-color: #3a0d10;
+  box-shadow: 0 4px 0 #3a0d10;
+}
+
 .choice-btn {
   position: relative;
   display: flex;
@@ -3759,6 +3792,34 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* The fade-out for a goal celebration (see `.hud.celebrating` below). The
+   transition lives here, on a rule that always matches, so the controls fade
+   back in as smoothly as they fade out. The SPECIAL button repeats its own
+   transitions or this would drop the press animation. */
+.hud .mentality-row,
+.hud .action-row {
+  transition: opacity 0.25s ease;
+}
+
+.hud .special-btn {
+  transition:
+    opacity 0.25s ease,
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
+    filter 0.15s ease;
+}
+
+/* A goal celebration owns the pitch: the tactical controls are inert while the
+   ball is dead — there is nothing to call — and they sit exactly where the
+   camera pushes in, so they fade out and let the celebration through. Sound and
+   pause deliberately stay: those are still usable. */
+.hud.celebrating .mentality-row,
+.hud.celebrating .action-row,
+.hud.celebrating .special-btn {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mentality-row {

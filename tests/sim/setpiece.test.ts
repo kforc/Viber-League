@@ -105,6 +105,36 @@ describe('set pieces', () => {
     expect(w.stats.fouls[1]).toBe(1);
   });
 
+  it('lets the human shooter pick where the penalty goes', () => {
+    // Award the human (team 0) a penalty, queue a `shot` command for each lane,
+    // then resolve. The chosen lane must set the sign of the launch, so a right
+    // aim must launch further right than a left aim regardless of accuracy spread.
+    const launchVy = (aim: 'left' | 'centre' | 'right'): number => {
+      const w = createWorld(makeConfig(3));
+      const def = w.players.find((p) => p.team === 1 && p.role === 'DEF')!;
+      awardFoul(w, def, true); // penalty to team 0
+      queue(w, { type: 'shot', team: 0, value: aim });
+      for (let i = 0; i < 200; i++) {
+        step(w, TICK);
+        if (w.phase === 'penaltyshot' && w.penaltyShot) return w.ball.vel.y;
+      }
+      throw new Error('penalty never struck');
+    };
+
+    const vyRight = launchVy('right');
+    const vyLeft = launchVy('left');
+    expect(vyRight).toBeGreaterThan(vyLeft);
+  });
+
+  it('ignores a penalty-aim command from the non-human team', () => {
+    const w = createWorld(makeConfig(3));
+    const def = w.players.find((p) => p.team === 1 && p.role === 'DEF')!;
+    awardFoul(w, def, true);
+    queue(w, { type: 'shot', team: 1, value: 'right' });
+    step(w, TICK);
+    expect(w.penaltyAim).toBeNull();
+  });
+
   it('blows the whistle before it says who fouled', () => {
     // The referee stops play first and reports second. The audio layer plays the
     // whistle off the FIRST event, so if the order ever flips the blast arrives

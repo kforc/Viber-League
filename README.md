@@ -70,6 +70,10 @@ straight into a match.
 - **Two halves** with a half-time tactical choice, goal celebrations with
   confetti, pause, and a full-time results screen with match stats (possession,
   shots, passes, corners, fouls, tackles).
+- **Goal celebrations.** The scoring side throws its arms up for ~2 seconds
+  while the camera pushes in on the goal and the tactical controls fade out
+  (sound and pause stay live). Three arm variants cycle across the squad so it
+  never reads as one animation stamped on five players.
 - **Mobile-first UI** — portrait, touch-sized targets, safe-area aware.
 
 ### The roster
@@ -144,7 +148,11 @@ possible without a redesign.
   world; rain and snow are a single recycled `THREE.Points` cloud (cheap on mobile).
 - Blob shadows instead of shadow maps (mobile budget).
 - Camera sits behind the player's own goal so **you attack away from the
-  viewer**.
+  viewer**. On a goal it pushes in toward the goal end (height and distance
+  eased at 12%/frame, so the whip-in never reads as a glitch) and pulls back out
+  before the restart. The push-in is aspect-aware: a portrait viewport is narrow,
+  so the same move that frames the group in landscape would crop the near Vibers
+  out of shot, and the camera holds further back there.
 
 ### The brand
 
@@ -214,6 +222,7 @@ src/
 tests/sim/      determinism + balance + roster/flow + set-piece tests
 tests/app/      career + profile persistence tests
 tests/audio/    whistle patterns + crowd model + no-Web-Audio fallback
+tests/render/   celebration poses + the goal-phase clock that drives them
 tests/brand.test.ts  path helpers, the icon set, and that the markup is safe for innerHTML
 tools/cdp/      headless-Chrome harnesses, single-file bundler, contact sheets
 docs/           technical plan

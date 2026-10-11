@@ -90,6 +90,7 @@ export class Hud {
   private build(): void {
     clear(this.root);
     const hud = el('div', 'hud');
+    this.hudEl = hud;
 
     const top = el('div', 'hud-top');
     const board = el('div', 'scoreboard');
@@ -188,6 +189,14 @@ export class Hud {
       this.setPieceEl.textContent = `${SETPIECE_LABEL[sp.kind]} · ${t.short}`;
       this.setPieceEl.classList.toggle('penalty', sp.kind === 'penalty');
     }
+
+    /*
+     * A goal celebration owns the pitch. The tactical controls are inert while
+     * the ball is dead — there is nothing to call — and they sit exactly where
+     * the camera pushes in, so they fade out and let the celebration through.
+     * Sound and pause deliberately stay: those are still usable.
+     */
+    this.hudEl.classList.toggle('celebrating', w.phase === 'goal');
 
     for (const [id, btn] of this.mentalityBtns) {
       btn.classList.toggle('active', h.mentality === id);

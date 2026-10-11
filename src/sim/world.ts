@@ -124,6 +124,7 @@ export function createWorld(config: MatchConfig): World {
     tackleLock: 0,
     setPiece: null,
     penaltyDive: null,
+    penaltyAim: null,
     penaltyShot: null,
     flankBias: 0,
     pending: [],
@@ -159,6 +160,7 @@ export function resetPositions(world: World, _kind: 'kickoff' | 'goal'): void {
   world.setPiece = null;
   world.penaltyShot = null;
   world.penaltyDive = null;
+  world.penaltyAim = null;
 
   const kicking = world.kickoffTeam;
 

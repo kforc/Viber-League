@@ -173,6 +173,7 @@ export type Command =
   | { type: 'special'; team: TeamId }
   | { type: 'action'; team: TeamId; value: 'shoot' | 'pass' | 'clear' }
   | { type: 'dive'; team: TeamId; value: DiveDirection }
+  | { type: 'shot'; team: TeamId; value: DiveDirection }
   | { type: 'resume' }
   | { type: 'pause'; value: boolean };
 
@@ -204,6 +205,8 @@ export interface World {
   setPiece: SetPiece | null;
   /** The defending side's queued dive, consumed when the penalty is struck. */
   penaltyDive: DiveDirection | null;
+  /** The human shooter's queued placement, consumed when their penalty is struck. */
+  penaltyAim: DiveDirection | null;
   /** Non-null while a penalty ball is travelling toward the goalkeeper. */
   penaltyShot: PenaltyShot | null;
   /**

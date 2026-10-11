@@ -235,6 +235,14 @@ function applyCommand(w: World, c: Command): void {
         w.penaltyDive = c.value;
       }
       break;
+    case 'shot':
+      // Only the human shooter can commit a placement, and only before the
+      // kick. A delayed or spoofed command cannot rewrite a shot in flight.
+      if (w.setPiece?.kind === 'penalty' && w.setPiece.team === c.team &&
+          w.teams[c.team].isHuman) {
+        w.penaltyAim = c.value;
+      }
+      break;
     case 'resume':
       if (w.phase === 'halftime') {
         w.half = 2;
