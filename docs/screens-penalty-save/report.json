@@ -1,0 +1,60 @@
+{
+  "m": {
+    "vy": -3.5602794237410396,
+    "shootTeam": 0,
+    "scoreBefore": [
+      0,
+      0
+    ],
+    "scored": false,
+    "scoreAfter": [
+      0,
+      0
+    ],
+    "ballLane": "left"
+  },
+  "m2": {
+    "vy": 3.23050615490303,
+    "shootTeam": 0,
+    "scoreBefore": [
+      0,
+      0
+    ],
+    "scored": false,
+    "scoreAfter": [
+      0,
+      0
+    ],
+    "ballLane": "right"
+  },
+  "w1": {
+    "vy": 4.1441007574690065,
+    "shootTeam": 0,
+    "scoreBefore": [
+      0,
+      0
+    ],
+    "scored": true,
+    "scoreAfter": [
+      1,
+      0
+    ],
+    "ballLane": "right"
+  },
+  "w2": {
+    "vy": 4.8081844251963055,
+    "shootTeam": 1,
+    "scoreBefore": [
+      1,
+      0
+    ],
+    "scored": true,
+    "scoreAfter": [
+      1,
+      1
+    ],
+    "ballLane": "right"
+  },
+  "errors": [],
+  "failures": 0
+}

@@ -272,7 +272,9 @@ function advancePenaltyShot(w: World, dt: number): void {
   const goalLine = dir * PITCH_HALF_L;
   const keeperLine = goalLine - dir * 1.3;
   const keeper = w.players.find((p) => p.id === shot.keeper) ?? null;
-  const diveY = shot.dive === 'left' ? -1.35 : shot.dive === 'right' ? 1.35 : 0;
+  // Mirrors takePenalty's lane mapping: the +Z camera puts world +Y on the
+  // screen's left, so "right" dives to world -Y (screen right).
+  const diveY = shot.dive === 'left' ? 1.35 : shot.dive === 'right' ? -1.35 : 0;
   const before = v2(b.pos.x, b.pos.y);
   const beforeH = b.h;
   shot.elapsed += dt;

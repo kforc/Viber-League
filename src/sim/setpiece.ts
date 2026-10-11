@@ -567,7 +567,11 @@ function takePenalty(w: World, sp: SetPiece, taker: Player | null): void {
   // the match deterministic — the RNG is only consumed for the CPU's kick.
   const humanShooter = sp.team === 0;
   const lane = humanShooter && w.penaltyAim ? w.penaltyAim : lanes[w.rng.int(0, 2)];
-  const laneY = lane === 'left' ? -1.35 : lane === 'right' ? 1.35 : 0;
+  // The keeper/camera looks down +Z, which mirrors world +Y onto the LEFT of
+  // the screen. So a "right" placement must use world -Y to appear on the
+  // right of the screen, and "left" uses world +Y. (Both the shot and the
+  // keeper dive below flip together, so the save geometry is unchanged.)
+  const laneY = lane === 'left' ? 1.35 : lane === 'right' ? -1.35 : 0;
   const spread = (0.32 + (1 - accuracy) * 1.65) * weatherMods(w.weather).shotSpread;
   const aimY = laneY + w.rng.range(-spread, spread);
   const aim = v2(atkLine, aimY);

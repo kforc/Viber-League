@@ -123,7 +123,11 @@ describe('set pieces', () => {
 
     const vyRight = launchVy('right');
     const vyLeft = launchVy('left');
-    expect(vyRight).toBeGreaterThan(vyLeft);
+    // The +Z camera mirrors world +Y onto screen-left, so the "right" placement
+    // must launch to world -Y (negative vy) and "left" to world +Y (positive).
+    expect(vyRight).toBeLessThan(0);
+    expect(vyLeft).toBeGreaterThan(0);
+    expect(vyRight).toBeLessThan(vyLeft);
   });
 
   it('ignores a penalty-aim command from the non-human team', () => {

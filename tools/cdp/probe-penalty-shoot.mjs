@@ -174,7 +174,11 @@ const strikeL = await evaluate(`(() => {
 })()`);
 const vyLeft = strikeL.velocity.y;
 console.log('strike-right.vy', vyRight, 'strike-left.vy', vyLeft);
-check('a right placement launches right of a left placement', vyRight > vyLeft);
+// Screen mapping: the +Z camera mirrors world +Y onto the screen's LEFT, so a
+// "right" pick (world -Y, vy < 0) appears on the screen's right, i.e. to the
+// screen-right of a "left" pick (world +Y, vy > 0). Hence vyRight < vyLeft.
+check('a right placement launches to screen-right of a left placement',
+  vyRight < vyLeft && vyRight < 0 && vyLeft > 0);
 
 check('the page reported no JavaScript exceptions', errors.length === 0);
 await screenshot('04-struck-left');
