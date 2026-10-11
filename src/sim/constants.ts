@@ -1,5 +1,7 @@
 // sim/constants.ts — tuning constants. Data, not code (spec §20).
 
+import type { Mentality, Role } from './types';
+
 export const TICK_HZ = 60;
 export const TICK = 1 / TICK_HZ;
 
@@ -37,7 +39,7 @@ export const BALL_FRICTION = 1.6; // ground rolling damping (per second)
 export const BALL_AIR_DRAG = 0.35;
 export const BALL_GRAVITY = 14;
 export const BALL_RESTITUTION = 0.55;
-export const BALL_MAX_SPEED = 34;
+export const BALL_MAX_SPEED = 42;
 
 // --- Movement ---
 export const BASE_MAX_SPEED = 5.4;
@@ -86,7 +88,13 @@ export const KICKOFF_PAUSE = 1.6; // seconds
 export const GOAL_PAUSE = 2.6; // seconds
 export const THINK_INTERVAL = 0.22; // seconds between AI decisions
 export const ACTION_COOLDOWN = 0.7; // seconds between shoot/pass attempts
-export const SHOT_SPEED = 25;
+export const SHOT_SPEED = 28;
+/**
+ * A long shot is hit harder than a placed finish, so a striker can score from
+ * range rather than only from inside the box. Combined with the raised
+ * BALL_MAX_SPEED this is what makes "a goal from anywhere" possible.
+ */
+export const LONG_SHOT_POWER = 1.24;
 export const PASS_SPEED_BASE = 13;
 /** Comfortably in range: always worth pulling the trigger. */
 export const SHOOT_RANGE = 9;
@@ -149,3 +157,36 @@ export const CORNER_SPEED = 14.5;
 export const GOAL_KICK_SPEED = 21;
 export const FREE_KICK_SPEED = 18;
 export const PENALTY_SPEED = 26;
+
+/**
+ * How a mentality reshapes the side's *arrangement* — not a stat boost, a
+ * different shape on the pitch. This is what makes "Defend" actually look like
+ * a defensive block and "Attack" look like a side pushing up, rather than the
+ * whole team simply sliding a couple of metres.
+ *
+ *   depth — whole-team forward shift in metres (positive = up the pitch).
+ *   role  — extra forward shift per role on top of `depth`, so the lines do not
+ *           move as one lump (a defensive line pushes up while the striker
+ *           stays high; a striker drops in to press when defending).
+ *   width — horizontal stretch (1 = full width, <1 = narrow and compact).
+ *   compact — how tightly the block sits around the ball (1 = rigid slots,
+ *           lower = the whole side collapses onto the ball's channel).
+ */
+export interface MentalityShape {
+  depth: number;
+  role: Record<Role, number>;
+  width: number;
+  compact: number;
+}
+
+export const MENTALITY_SHAPE: Record<Mentality, MentalityShape> = {
+  // High line, full width, bodies committed forward.
+  attack: { depth: 3.0, role: { GK: 0, DEF: 3.5, MID: 3.0, FWD: 2.5 }, width: 1.0, compact: 0.95 },
+  // The neutral shape: moderate depth, normal width.
+  balanced: { depth: 0.0, role: { GK: 0, DEF: 0, MID: 0, FWD: 0 }, width: 0.85, compact: 0.9 },
+  // A deep, narrow block. The striker stays high as an out-ball.
+  defend: { depth: -2.8, role: { GK: 0, DEF: -3.0, MID: -1.5, FWD: 1.5 }, width: 0.7, compact: 0.78 },
+  // Sit in, stay compact, ready to break: deeper than balanced, but the striker
+  // is already upfield so the counter has an outlet.
+  counter: { depth: -1.6, role: { GK: 0, DEF: -1.5, MID: -0.5, FWD: 0.5 }, width: 0.78, compact: 0.84 },
+};

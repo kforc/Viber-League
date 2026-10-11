@@ -23,9 +23,9 @@ import {
   GOAL_PAUSE,
   KEEP_IN_REACH,
   KEEPER_CONTROL_RADIUS,
-  KEEPER_SAVE_REACH,
   KICKOFF_PAUSE,
   LONG_PASS_DISTANCE,
+  LONG_SHOT_POWER,
   LONG_SHOT_RANGE,
   PASS_SPEED_BASE,
   PENALTY_AREA_DEPTH,
@@ -41,6 +41,7 @@ import {
   integrateBall,
   integratePlayer,
   kickBall,
+  nearestOpponent,
   resolvePlayerCollisions,
 } from './physics';
 import { bestPassTarget, updateAI } from './ai';
@@ -75,22 +76,51 @@ function handleCarrier(w: World, p: Player): void {
   const goal = v2(p.team === 0 ? PITCH_HALF_L : -PITCH_HALF_L, 0);
 
   if (p.decision === 'shoot') {
-    // Accuracy degrades with distance and improves with the shooter's skill
-    // (spec §5.1: unpredictable but readable). The spread is wide enough that
-    // shots genuinely miss — which is where goal kicks and corners come from.
+    // A clear sight of goal must be finished, not skied into the corner.
+    // Accuracy is the sum of the three things a striker actually controls:
+    // ability, room, and range. Those set the spread; placement then steers
+    // the ball into a chosen part of the goal.
     const dGoal = dist(p.pos, goal);
-    const skill = 1.25 - (p.attrs.shooting / 99) * 0.55; // 0.70 (elite) .. 1.25
-    const spread = (0.95 + dGoal * 0.3) * weatherMods(w.weather).shotSpread * skill;
-    // A long shot is aimed at a corner and hit harder; a close-range finish is
-    // placed rather than blasted.
+    const opp = nearestOpponent(w, p);
+    const pressure = opp ? dist(p.pos, opp.pos) : 99;
     const long = dGoal > SHOOT_RANGE;
-    const corner = long ? (w.rng.range(0, 1) < 0.5 ? -1 : 1) * GOAL_HALF_W * 0.6 : 0;
-    const aim = v2(goal.x, goal.y + corner + w.rng.range(-spread, spread));
-    const power =
-      SHOT_SPEED * (0.82 + (p.attrs.shooting / 99) * 0.4) * (long ? 1.14 : 1);
-    kickBall(w, p, sub(aim, p.pos), power, w.rng.range(0.5, 2.0));
+    const clear = !long && dGoal < 8 && pressure > 2.6;
+
+    const skillAcc = p.attrs.shooting / 99;
+    const spaceAcc = clamp((pressure - 1) / 4, 0, 1);
+    const distAcc = clamp(1 - dGoal / 20, 0, 1);
+    const acc = clamp(skillAcc * 0.55 + spaceAcc * 0.3 + distAcc * 0.25, 0, 1);
+
+    // Three tiers of accuracy:
+    //   clear  — a sight of goal from range and space: near-pinpoint, on target.
+    //   long   — ambitious but aimed at a corner; roughly two in three on target.
+    //   other  — a scrambled or pressed effort: it genuinely misses, which is
+    //            where corners and goal kicks come from.
+    let spread: number;
+    if (clear) spread = 0.16 + (1 - acc) * 0.5;
+    else if (long) spread = 0.55 + (1 - acc) * 1.8;
+    else spread = 1.0 + (1 - acc) * 3.8 + dGoal * 0.06;
+    spread *= weatherMods(w.weather).shotSpread;
+
+    // Placement: choose a side. A clear chance is tucked just inside a post; a
+    // long shot is aimed at the corner hardest to reach; a scrambled effort
+    // goes where it goes.
+    let place: number;
+    if (clear) place = (w.rng.range(0, 1) < 0.5 ? -1 : 1) * GOAL_HALF_W * 0.35;
+    else if (long) place = (w.rng.range(0, 1) < 0.5 ? -1 : 1) * GOAL_HALF_W * 0.6;
+    else place = (w.rng.range(0, 1) * 2 - 1) * GOAL_HALF_W * 0.5;
+    const aimY = clamp(
+      place + w.rng.range(-spread, spread),
+      -GOAL_HALF_W - 2.2,
+      GOAL_HALF_W + 2.2,
+    );
+    const aim = v2(goal.x, aimY);
+    // A long shot is hit harder — that pace, plus the placement above, is what
+    // lets a Viber score from range instead of only from inside the box.
+    const power = SHOT_SPEED * (0.85 + skillAcc * 0.45) * (long ? LONG_SHOT_POWER : 1);
+    kickBall(w, p, sub(aim, p.pos), power, w.rng.range(0.4, 1.8));
     w.stats.shots[p.team] += 1;
-    const onTarget = Math.abs(aim.y) < GOAL_HALF_W;
+    const onTarget = Math.abs(aimY) < GOAL_HALF_W;
     w.events.push({ type: 'shot', team: p.team, player: p.id, onTarget });
     p.cooldown = ACTION_COOLDOWN;
     p.decision = 'dribble';
@@ -199,6 +229,72 @@ function tryKeepIn(w: World, out: { axis: 'x' | 'y'; side: 1 | -1 }): boolean {
   );
   w.events.push({ type: 'tackle', team: best.team, player: best.id, won: true });
   return true;
+}
+
+/**
+ * Resolve an open-play shot against the keeper at the keeper line — the same
+ * geometric model a penalty uses, so a save is something the keeper *reached*,
+ * not a dice roll. The keeper has already been steering toward the ball's
+ * projected crossing point (see `moveTarget`), so whether they get there is a
+ * question of pace and placement: a shot into the corner beats them, a shot at
+ * them is held. A beaten shot is left alone and becomes a goal next tick.
+ */
+function tryKeeperSave(w: World, before: Vec2, b: World['ball']): void {
+  const speedNow = len(b.vel);
+  if (speedNow <= 6) return;
+
+  // Which goal is this heading for? x<0 -> the -x goal (team 0's).
+  const def: TeamId = b.vel.x < 0 ? 0 : 1;
+  const goalX = def === 0 ? -PITCH_HALF_L : PITCH_HALF_L;
+  // Only bother near the goal — a ball struck toward a goal from the far half
+  // is not yet a shot the keeper can read.
+  if (Math.abs(b.pos.x - goalX) > 14) return;
+
+  const keeperLine = def === 0 ? -PITCH_HALF_L + 0.7 : PITCH_HALF_L - 0.7;
+  const crossed = (before.x - keeperLine) * (b.pos.x - keeperLine) <= 0;
+  if (!crossed) return;
+
+  // Interpolate where the ball actually crossed the line (not this tick's end
+  // point) so the outcome is independent of the fixed timestep.
+  const t = (keeperLine - before.x) / (b.pos.x - before.x);
+  const contactY = before.y + (b.pos.y - before.y) * t;
+  const contactH = b.h;
+  if (contactH > GOAL_H) return; // chipped over the keeper — no save.
+
+  const keeper = w.players.find((p) => p.isGK && p.team === def);
+  if (!keeper) return;
+
+  const reflex =
+    (keeper.attrs.tackling * 0.5 + keeper.attrs.technique * 0.3 + keeper.attrs.pace * 0.2) / 99;
+  const reach = 0.95 + reflex * 0.55;
+  const gap = Math.abs(contactY - keeper.pos.y);
+
+  if (gap <= reach) {
+    // Reached it: held.
+    b.pos = v2(keeperLine, contactY);
+    keeper.pos.y = contactY;
+    b.owner = keeper.id;
+    b.lastTouch = keeper.id;
+    b.vel = v2(0, 0);
+    b.vh = 0;
+    b.h = BALL_RADIUS;
+    b.looseTimer = 0.2;
+    b.saveCooldown = 0.7;
+    w.events.push({ type: 'save', team: def, keeper: keeper.id });
+  } else if (gap <= reach + 0.6 && w.rng.range(0, 1) < 0.28) {
+    // Fingertips: turned behind for a corner.
+    const ySign = contactY >= 0 ? 1 : -1;
+    b.lastTouch = keeper.id;
+    b.owner = null;
+    b.pos = v2(keeperLine, ySign * (GOAL_HALF_W + 0.8));
+    b.vel = v2((def === 0 ? -1 : 1) * 8, ySign * 4);
+    b.h = BALL_RADIUS;
+    b.vh = 0;
+    b.looseTimer = 0.3;
+    b.saveCooldown = 0.4;
+    w.events.push({ type: 'save', team: def, keeper: keeper.id });
+  }
+  // Otherwise the keeper is beaten all ends up — it is a goal.
 }
 
 function applyCommand(w: World, c: Command): void {
@@ -420,10 +516,15 @@ export function step(w: World, dt: number): void {
         }
       } else b.owner = null;
     } else {
+      const before = v2(b.pos.x, b.pos.y);
       const outcome = integrateBall(w, dt);
-      if (outcome.goal !== null && w.phase === 'play') {
+      // A fast ball crossing the keeper line is resolved geometrically here,
+      // before the goal/out checks, so a save is what the keeper actually
+      // reached rather than a probability roll.
+      if (b.owner === null && w.phase === 'play') tryKeeperSave(w, before, b);
+      if (outcome.goal !== null && w.phase === 'play' && b.owner === null) {
         onGoal(w, outcome.goal);
-      } else if (outcome.out && w.phase === 'play') {
+      } else if (outcome.out && w.phase === 'play' && b.owner === null) {
         // Out of play — unless somebody can still stretch and keep it in.
         if (!tryKeepIn(w, outcome.out)) awardFromOutOfPlay(w, outcome.out);
       } else if (playable && b.owner === null && b.looseTimer <= 0) {
@@ -458,37 +559,15 @@ export function step(w: World, dt: number): void {
             b.looseTimer = 0.3;
           };
 
-          if (best.isGK && speedNow > 8 && b.saveCooldown <= 0) {
-            // A shot is coming in. Stopping it is a dive, not a catch: the
-            // keeper only covers KEEPER_SAVE_REACH and only gets one dive per
-            // shot. Straight at them -> held. Reaching for it -> fingertips and
-            // behind for a corner. Beaten all ends up -> goal.
-            const reflex =
-              (best.attrs.tackling * 0.5 +
-                best.attrs.technique * 0.3 +
-                best.attrs.pace * 0.2) /
-              99;
-            b.saveCooldown = 0.5;
-
-            if (bd <= KEEPER_SAVE_REACH) {
-              if (w.rng.range(0, 1) < 0.22 + reflex * 0.42) {
-                // Held.
-                b.owner = best.id;
-                b.lastTouch = best.id;
-                b.vel = v2(0, 0);
-                w.events.push({ type: 'save', team: best.team, keeper: best.id });
-              } else if (w.rng.range(0, 1) < 0.18) {
-                // Beaten but gets a fingertip to it: turned behind for a corner.
-                deflectBehind();
-                w.events.push({ type: 'save', team: best.team, keeper: best.id });
-              }
-              // Otherwise it is a goal.
-            } else if (w.rng.range(0, 1) < 0.15 + reflex * 0.25) {
-              // Stretched full length and just reached it — behind for a corner.
-              deflectBehind();
-              w.events.push({ type: 'save', team: best.team, keeper: best.id });
+          if (best.isGK) {
+            // The keeper only gathers a *tame* ball here (a rolling effort or a
+            // loose ball). A fast shot was already resolved at the keeper line
+            // in tryKeeperSave; if it beat them it must run into the net, not be
+            // magically collected on the way past.
+            if (speedNow <= 9 && b.saveCooldown <= 0) {
+              b.owner = best.id;
+              b.lastTouch = best.id;
             }
-            // Otherwise the keeper is beaten all ends up — it is a goal.
           } else if (speedNow > 12 && b.saveCooldown <= 0) {
             // A shot blocked by an outfield defender. The ball deflects away,
             // and a block near their own byline usually goes out for a corner.

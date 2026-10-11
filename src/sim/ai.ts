@@ -36,6 +36,7 @@ import {
   LONG_SHOT_MIN_SHOOTING,
   LONG_SHOT_RANGE,
   LONG_SHOT_SPACE,
+  MENTALITY_SHAPE,
   PASS_MIN_ADVANCE,
   PENALTY_AREA_DEPTH,
   PENALTY_AREA_HALF_W,
@@ -55,7 +56,6 @@ import {
   timeToBall,
 } from './physics';
 import { awardFoul, inOwnPenaltyArea, restartTaker, setPieceTarget } from './setpiece';
-import { slotWorldPos } from './world';
 import type { Mentality, Player, TeamId, World } from './types';
 
 export function opponentGoalPos(team: TeamId): Vec2 {
@@ -395,19 +395,25 @@ function moveTarget(w: World, p: Player): Vec2 {
 
   switch (p.decision) {
     case 'keeper': {
+      // The keeper holds the line just in front of their own goal and tracks
+      // where the ball is *going to* cross it — cutting the angle rather than
+      // mirroring the ball's current y. A shot straight at them is saved; a
+      // shot into the corner beats them because they cannot get across in time
+      // (see tryKeeperSave in engine.ts).
       const line = p.team === 0 ? -PITCH_HALF_L + 0.7 : PITCH_HALF_L - 0.7;
-      const towardGoalX = p.team === 0 ? -1 : 1;
-      let ty = clamp(b.pos.y * 0.5, -GOAL_HALF_W + 0.3, GOAL_HALF_W - 0.3);
+      const towardOwnGoalX = p.team === 0 ? -1 : 1;
+      let ty = clamp(b.pos.y * 0.55, -GOAL_HALF_W, GOAL_HALF_W);
 
-      // Predict where a moving ball will cross the goal line and get there.
-      if (b.owner === null && Math.sign(b.vel.x) === towardGoalX && Math.abs(b.vel.x) > 2) {
+      if (b.owner === null && Math.sign(b.vel.x) === towardOwnGoalX && Math.abs(b.vel.x) > 2) {
         const t = (line - b.pos.x) / b.vel.x;
-        if (t > 0 && t < 2.5) {
-          ty = clamp(b.pos.y + b.vel.y * t, -GOAL_HALF_W - 0.4, GOAL_HALF_W + 0.4);
+        if (t > 0 && t < 2.4) {
+          // Where the ball will actually reach the line.
+          ty = clamp(b.pos.y + b.vel.y * t, -GOAL_HALF_W - 0.35, GOAL_HALF_W + 0.35);
+        } else {
+          // Ball is a way off: hold a shaded central position.
+          ty = clamp(b.pos.y * 0.85, -GOAL_HALF_W, GOAL_HALF_W);
         }
       }
-      // Stay on the line and cover the predicted crossing point. Rushing out
-      // was leaving the goal exposed, so keepers hold their ground.
       return v2(line, ty);
     }
 
@@ -472,15 +478,19 @@ function supportTarget(w: World, p: Player): Vec2 {
   const b = w.ball;
   const dir = attackDir(p.team);
   const m = w.teams[p.team].mentality;
+  const shape = MENTALITY_SHAPE[m];
 
-  const slot = slotWorldPos(p, b.pos);
-  const push = m === 'attack' ? 2.6 : m === 'defend' ? -2.6 : m === 'counter' ? -1.6 : 0;
-
-  // Width by role: midfielders hold the touchline and stretch the pitch. That
-  // is how the ball ends up in the corners in the first place.
-  let ty = slot.y;
-  if (p.role === 'MID') ty = clamp(ty * 1.4, -PITCH_HALF_W * 0.88, PITCH_HALF_W * 0.88);
-  else if (p.role === 'DEF') ty = clamp(ty * 1.15, -PITCH_HALF_W * 0.8, PITCH_HALF_W * 0.8);
+  // The base hold position is the formation slot, reshaped by the mentality:
+  // the whole side shifts up or back, each role gets its own extra shift (so
+  // the lines do not move as one lump), and the width stretches or narrows.
+  // This is what makes Defend read as a block and Attack read as a push up.
+  const slotX = p.slot.x * PITCH_HALF_L * 0.92;
+  const baseX = clamp(
+    slotX + (shape.depth + shape.role[p.role]) * dir,
+    -PITCH_HALF_L * 0.95,
+    PITCH_HALF_L * 0.95,
+  );
+  let ty = clamp(p.slot.y * PITCH_HALF_W * shape.width, -PITCH_HALF_W * 0.92, PITCH_HALF_W * 0.92);
 
   const carrier =
     b.owner !== null ? (w.players.find((x) => x.id === b.owner) ?? null) : null;
@@ -502,11 +512,11 @@ function supportTarget(w: World, p: Player): Vec2 {
     if (rank === 2) {
       return v2(
         clamp(carrier.pos.x + carrierDir * 9.0, -PITCH_HALF_L * 0.92, PITCH_HALF_L * 0.92),
-        clamp(p.slot.y * PITCH_HALF_W * 0.62, -PITCH_HALF_W * 0.75, PITCH_HALF_W * 0.75),
+        clamp(p.slot.y * PITCH_HALF_W * 0.62 * shape.width, -PITCH_HALF_W * 0.75, PITCH_HALF_W * 0.75),
       );
     }
     // Everyone else keeps the shape, shaded forward with play.
-    return v2(slot.x + push * dir, ty);
+    return v2(baseX, ty);
   }
 
   // ---- Off the ball, we do not have it ----
@@ -515,9 +525,11 @@ function supportTarget(w: World, p: Player): Vec2 {
     return v2(b.pos.x - dir * 1.6, clamp(b.pos.y * 0.5, -PITCH_HALF_W * 0.6, PITCH_HALF_W * 0.6));
   }
 
-  // Hold a compact block. Defenders shade across to the flank under threat.
-  const compact = m === 'defend' ? 0.78 : m === 'counter' ? 0.84 : 0.9;
-  let tx = slot.x * compact + b.pos.x * (1 - compact) + push * dir;
+  // Hold a compact block. How tightly the side collapses onto the ball, and how
+  // wide it stays, both come from the mentality — a defending side is narrow and
+  // compact, an attacking side stays spread and pushes up.
+  const compact = shape.compact;
+  let tx = baseX * compact + b.pos.x * (1 - compact);
   ty = ty * compact + b.pos.y * (1 - compact);
 
   // The CPU shades toward whichever flank the human keeps attacking.

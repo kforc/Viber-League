@@ -1,8 +1,8 @@
 // sim/world.ts — builds a fresh, deterministic match world from a MatchConfig.
 
 import { makeRng } from './core/rng';
-import { v2, type Vec2 } from './core/math';
-import { BALL_RADIUS, PITCH_HALF_L, PITCH_HALF_W } from './constants';
+import { clamp, v2 } from './core/math';
+import { BALL_RADIUS, MENTALITY_SHAPE, PITCH_HALF_L, PITCH_HALF_W } from './constants';
 import { CLUBS, FORMATIONS } from './content';
 import { buildLineup, ROSTER_BY_ID, type LineupSlot } from './roster';
 import type { MatchConfig, Player, Role, Team, TeamId, ViberId, World } from './types';
@@ -61,20 +61,6 @@ function makePlayers(team: Team, lineup: LineupSlot[]): Player[] {
 
   return out;
 }
-
-function slotWorldPos(p: Player, ball: Vec2): Vec2 {
-  // Formation slot in world space, mirrored per team, then pulled toward the ball
-  // so the block slides with play (spec §5.2: AI owns positioning).
-  const baseX = p.slot.x * PITCH_HALF_L * 0.92;
-  const baseY = p.slot.y * PITCH_HALF_W * 0.82;
-  const pull = p.isGK ? 0.05 : 0.22;
-  return v2(
-    baseX + (ball.x - baseX) * pull,
-    baseY + (ball.y - baseY) * pull * 0.9,
-  );
-}
-
-export { slotWorldPos };
 
 export function createWorld(config: MatchConfig): World {
   nextPlayerId = 1;
@@ -166,10 +152,27 @@ export function resetPositions(world: World, _kind: 'kickoff' | 'goal'): void {
 
   for (const p of world.players) {
     // Kickoff rules: everyone starts in their own half, spread by role so the
-    // shape reads like a real restart instead of a pile-up at the centre.
+    // shape reads like a real restart instead of a pile-up at the centre. The
+    // mentality reshapes it further, so a Defend side lines up deep and narrow
+    // while an Attack side lines up high — the arrangement matches the approach
+    // from the very first whistle.
     const ownSideSign = p.team === 0 ? -1 : 1;
-    const x = ownSideSign * KICKOFF_DEPTH[p.role] * PITCH_HALF_L;
-    const y = p.slot.y * PITCH_HALF_W * 0.72;
+    const dir = p.team === 0 ? 1 : -1;
+    const shape = MENTALITY_SHAPE[world.teams[p.team].mentality];
+    // At a kickoff only the whole-team depth shift is applied, so the role
+    // lines keep their relative order (the full per-role shape would pile
+    // everyone onto the halfway line, which the own-half rule clamps them to).
+    const rawX = ownSideSign * KICKOFF_DEPTH[p.role] * PITCH_HALF_L + shape.depth * dir;
+    // Never let the shape push anyone across the halfway line at a kickoff.
+    const x =
+      ownSideSign < 0
+        ? clamp(rawX, -PITCH_HALF_L * 0.95, -0.6)
+        : clamp(rawX, 0.6, PITCH_HALF_L * 0.95);
+    const y = clamp(
+      p.slot.y * PITCH_HALF_W * shape.width,
+      -PITCH_HALF_W * 0.9,
+      PITCH_HALF_W * 0.9,
+    );
 
     p.pos = v2(x, y);
     p.vel = v2(0, 0);
