@@ -69,10 +69,12 @@ function makePitchTexture(surface: Surface): THREE.CanvasTexture {
   const g = c.getContext('2d')!;
 
   const snow = surface === 'snow';
-  const lineColor = snow ? 'rgba(90,130,180,0.9)' : 'rgba(255,255,255,0.92)';
+  const lineColor = snow ? 'rgba(90,130,180,0.82)' : 'rgba(255,255,255,0.8)';
 
-  // Base + mown stripes along the length.
-  g.fillStyle = snow ? '#e9f3fc' : '#3d9e55';
+  // Base + mown stripes along the length. The turf sits a shade deeper and less
+  // acid than it used to: at the old brightness the green was the single most
+  // saturated thing on screen and the white markings glared off it.
+  g.fillStyle = snow ? '#e9f3fc' : '#3c8b52';
   g.fillRect(0, 0, W, H);
   const stripes = 10;
   for (let i = 0; i < stripes; i++) {

@@ -61,7 +61,11 @@
      opponent, the roles, stadium lighting, feedback. */
   --lime-hi: #f0ff9c;
   --lime-deep: #93a800;
-  --lime-glow: rgba(223, 249, 2, 0.5);
+  /* Toned down from 0.5. The lime is the brand and stays flat and bright, but
+     the *halo* around it was blooming into a green haze over the world behind
+     the panels. A calmer glow keeps the buttons reading as lime plastic rather
+     than as light sources. */
+  --lime-glow: rgba(223, 249, 2, 0.3);
 
   --cyan: #5cffe7;
   --violet: #a56bff;
@@ -196,8 +200,8 @@ body {
      The cast is a floodlit night match — lime light pooling from the top,
      green-black turf shadow rising from below. No blue, no violet. */
   background:
-    radial-gradient(120% 58% at 50% -16%, rgba(223, 249, 2, 0.22), transparent 62%),
-    radial-gradient(70% 40% at 4% 6%, rgba(223, 249, 2, 0.1), transparent 58%),
+    radial-gradient(120% 58% at 50% -16%, rgba(223, 249, 2, 0.15), transparent 62%),
+    radial-gradient(70% 40% at 4% 6%, rgba(223, 249, 2, 0.07), transparent 58%),
     radial-gradient(96% 56% at 100% 106%, rgba(30, 56, 20, 0.5), transparent 62%),
     linear-gradient(
       180deg,
@@ -620,7 +624,7 @@ body {
     rgba(223, 249, 2, 0.1);
   transform: translateY(-5px) scale(1.035);
   z-index: 3;
-  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.7), 0 0 22px rgba(223, 249, 2, 0.3);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.7), 0 0 18px rgba(223, 249, 2, 0.18);
 }
 
 /* A sweep of light across a chosen card. */
@@ -830,7 +834,7 @@ body {
      3px the CTA stopped reading as the same object as Viber Brawl's button. */
   border: 4px solid var(--outline);
   border-radius: var(--r-lg);
-  box-shadow: 0 6px 0 var(--outline), 0 0 24px rgba(223, 249, 2, 0.2);
+  box-shadow: 0 6px 0 var(--outline), 0 0 18px rgba(223, 249, 2, 0.12);
 }
 
 .primary-btn:active {
@@ -3300,7 +3304,7 @@ body {
   background: var(--lime);
   color: var(--ink);
   border-color: var(--outline);
-  box-shadow: 0 4px 0 var(--outline), 0 0 22px rgba(223, 249, 2, 0.25);
+  box-shadow: 0 4px 0 var(--outline), 0 0 16px rgba(223, 249, 2, 0.16);
 }
 .menu-btn.danger {
   background: rgba(120, 20, 24, 0.9);
@@ -3338,7 +3342,7 @@ body {
   background: rgba(223, 249, 2, 0.1);
   outline: 4px solid var(--lime);
   outline-offset: -8px;
-  box-shadow: 0 4px 0 var(--outline), 0 0 22px rgba(223, 249, 2, 0.3);
+  box-shadow: 0 4px 0 var(--outline), 0 0 16px rgba(223, 249, 2, 0.18);
 }
 
 .choice-label {
@@ -4062,7 +4066,7 @@ body {
 
 @keyframes readyPulse {
   to {
-    box-shadow: 0 6px 0 #4d6600, 0 0 0 7px rgba(223, 249, 2, 0.3), 0 0 38px rgba(223, 249, 2, 0.9);
+    box-shadow: 0 6px 0 #4d6600, 0 0 0 6px rgba(223, 249, 2, 0.22), 0 0 26px rgba(223, 249, 2, 0.55);
   }
 }
 

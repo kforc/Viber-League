@@ -37,11 +37,40 @@ const CROWD_BREATH = 0.055;
 
 /** Stepped concrete, alternating so the tiers read as rows. */
 const CONCRETE = [0x2b3654, 0x222d47, 0x323f62];
+
+/**
+ * The crowd.
+ *
+ * Deliberately muted. The old set was nine fully-saturated neons — red, yellow,
+ * green, blue, violet, white, orange, cyan, pink — tiled across both stands,
+ * which made the crowd the loudest thing on screen and pulled the eye off the
+ * pitch and the HUD. These are the same nine hues with roughly half the
+ * saturation and the brightness pulled down: still recognisably a colourful
+ * crowd, but it now sits behind the play instead of shouting over it.
+ */
 const CROWD_COLORS = [
-  0xff6b6b, 0xffd166, 0x4ade80, 0x60a5fa, 0xc084fc, 0xf1f5f9, 0xfb923c, 0x22d3ee, 0xf472b6,
+  0x5c6f96, // blue
+  0x8a5f74, // wine
+  0x7a8752, // olive
+  0x4f8188, // teal
+  0xa08a5f, // ochre
+  0x6f5f96, // violet
+  0x9a6f5c, // clay
+  0x5a6b7a, // slate
+  0x7d8a6f, // sage
+  0x9a9385, // stone
 ];
-const BOARD_COLORS = [0x2f6df6, 0xff5db1, 0xf2c53d, 0x22d3ee, 0x7b5cff, 0x34d399];
-const FLAG_COLORS = [0xff5d5d, 0xffd166, 0x60a5fa, 0x4ade80];
+
+/**
+ * The sponsor blocks along the hoardings.
+ *
+ * Darker and duller than they were. Their job is to be a band of advertising
+ * the eye skims past — not six competing brand colours. Keeping them low-key is
+ * also what lets the black-and-lime Viber League boards stand proud of them, the
+ * way a real ground's own signage reads against its sponsor strip.
+ */
+const BOARD_COLORS = [0x243a63, 0x5a2f47, 0x6b5a26, 0x1f4a52, 0x3b2f5e, 0x25482f];
+const FLAG_COLORS = [0xd95050, 0xe0b45a, 0x6f93c4, 0x5fa877];
 
 /* ------------------------------- module ------------------------------- */
 
@@ -172,8 +201,10 @@ function buildCrowd(
       m.makeTranslation(px, treadTop + 0.32, pz);
       mesh.setMatrixAt(i, m);
       color.setHex(CROWD_COLORS[Math.floor(Math.random() * CROWD_COLORS.length)]);
-      // Dim the higher rows a touch so the front row carries the eye.
-      color.multiplyScalar(1 - t * 0.045);
+      // Dim the higher rows a touch so the front row carries the eye, and let
+      // the back of the stand fall away into the gloom instead of reading as a
+      // flat wall of seats.
+      color.multiplyScalar(1 - t * 0.06);
       mesh.setColorAt(i, color);
       i++;
     }
