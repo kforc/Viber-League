@@ -1,0 +1,28 @@
+{
+  "viewport": [
+    844,
+    390
+  ],
+  "menu": {
+    "state": "paused",
+    "paused": true,
+    "buttons": [
+      "Resume",
+      "Quit to League"
+    ],
+    "l": 192,
+    "r": 652,
+    "sh": 295,
+    "ch": 295
+  },
+  "confirm": {
+    "buttons": [
+      "Quit without saving",
+      "Back"
+    ],
+    "title": "Quit match?"
+  },
+  "resultsBefore": "{}",
+  "errors": [],
+  "failures": 0
+}

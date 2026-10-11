@@ -1,0 +1,54 @@
+{
+  "viewport": [
+    844,
+    390
+  ],
+  "beforeR": {
+    "state": "penalty",
+    "paused": true,
+    "phase": "penalty",
+    "buttons": [
+      "↖ LeftLow-left corner",
+      "↑ CentreDown the middle",
+      "Right ↗Low-right corner"
+    ],
+    "rects": [
+      {
+        "l": 215,
+        "r": 346.328125,
+        "w": 131.328125,
+        "h": 77
+      },
+      {
+        "l": 356.328125,
+        "r": 487.65625,
+        "w": 131.328125,
+        "h": 77
+      },
+      {
+        "l": 497.65625,
+        "r": 628.984375,
+        "w": 131.328125,
+        "h": 77
+      }
+    ],
+    "panel": {
+      "l": 192,
+      "r": 652,
+      "sh": 280,
+      "ch": 280
+    }
+  },
+  "strikeR": {
+    "phase": "penaltyshot",
+    "velocity": {
+      "x": 25.564509209161578,
+      "y": 3.8199744771141964
+    },
+    "penalties": 1
+  },
+  "vyRight": 3.8199744771141964,
+  "vyLeft": -2.352869636389105,
+  "errors": [],
+  "failures": 0
+}
