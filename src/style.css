@@ -3311,6 +3311,164 @@ body {
   border-color: #3a0d10;
   box-shadow: 0 4px 0 #3a0d10;
 }
+.menu-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Substitutions — two columns of squad rows.
+   Pick who comes off on the left, then who comes on from the right. A row is
+   the same object as a pause button: flat fill, thick black outline, hard
+   offset, so the screen reads as part of the same family.
+   -------------------------------------------------------------------------- */
+
+.subs-screen {
+  justify-content: center;
+  /* `.overlay-screen` zeroes the padding and pins the panel with `margin-top:
+     auto`. Keep the pin — it is what makes an over-tall panel scroll from the
+     top instead of clipping it — but restore a little breathing room at the
+     edges so the sheet is not flush against the screen. */
+  padding: 8px 12px calc(8px + var(--safe-b));
+}
+/* Two classes, not one: `.panel` is declared later in this file at the same
+   specificity, so a bare `.subs-panel` loses the padding and width it sets. */
+.subs-screen .subs-panel {
+  width: min(620px, 100%);
+  text-align: center;
+  /* Tighter than a standard panel on purpose: five squad rows plus the bench
+     have to fit a 390px-tall landscape phone without the title or the way out
+     scrolling off the top. */
+  gap: 8px;
+  padding: 12px 15px;
+}
+.subs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+.subs-head .panel-title {
+  font-size: clamp(18px, 4.6vw, 26px);
+  text-align: left;
+}
+.subs-back {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  font-size: 13px;
+  box-shadow: 0 3px 0 var(--outline);
+}
+.subs-panel .panel-sub {
+  margin-bottom: 6px;
+  font-size: 11.5px;
+}
+.subs-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 0;
+}
+.subs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.subs-col-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.subs-empty {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-mute);
+}
+.sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 9px;
+  border-radius: var(--r-md);
+  text-align: left;
+  background: rgba(11, 18, 32, 0.85);
+  border: 3px solid var(--outline);
+  box-shadow: 0 3px 0 var(--outline);
+  transition:
+    transform 0.07s ease,
+    box-shadow 0.07s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.sub-row:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+/* The player coming off — the one live choice on the screen. */
+.sub-row.selected {
+  border-color: var(--lime);
+  background: rgba(223, 249, 2, 0.12);
+  box-shadow: 0 3px 0 var(--outline), 0 0 14px rgba(223, 249, 2, 0.16);
+}
+.sub-row.dim,
+.sub-row:disabled {
+  opacity: 0.45;
+}
+.sub-role {
+  flex-shrink: 0;
+  min-width: 34px;
+  padding: 3px 5px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-align: center;
+  color: var(--on-lime);
+  background: var(--role, var(--lime));
+}
+.sub-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.14;
+}
+.sub-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sub-role-name {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+.sub-ovr {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--lime);
+}
+/* Portrait: the two columns stack so the rows stay full width. */
+@media (max-width: 460px) {
+  .subs-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 .choice-btn {
   position: relative;

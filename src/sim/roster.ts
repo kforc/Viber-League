@@ -1013,6 +1013,50 @@ export function teamOverall(ids: string[]): number {
 /** The formation's slots, in the exact order world.ts fills them. */
 export const SLOT_ROLES: Role[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 
+/**
+ * How many substitutes a matchday squad carries.
+ *
+ * Three, and one per outfield line: the bench is cover, not a second team. It
+ * is also the substitution limit — you can only bring on the players who are
+ * actually sitting there.
+ */
+export const BENCH_SIZE = 3;
+
+/**
+ * Choose the bench that covers a starting five.
+ *
+ * One defender, one midfielder and one forward, taken from the best Vibers in
+ * the roster the manager did NOT pick. The point is cover: whoever goes down
+ * injured — or is simply having a bad game — has a like-for-like replacement
+ * waiting, which is what makes the substitution worth offering at all.
+ *
+ * A natural keeper is never benched. There is one gloves slot and the starter
+ * owns it; benching a second keeper would burn a third of the bench on a
+ * position that cannot be rotated into the outfield.
+ */
+export function autoBench(lineupIds: string[], size = BENCH_SIZE): string[] {
+  const taken = new Set(lineupIds);
+  const out: string[] = [];
+  for (const role of ['DEF', 'MID', 'FWD'] as ViberRole[]) {
+    if (out.length >= size) break;
+    const best = ROSTER
+      .filter((v) => v.role === role && !taken.has(v.id))
+      .sort((a, b) => overallOf(b) - overallOf(a))[0];
+    if (best) {
+      taken.add(best.id);
+      out.push(best.id);
+    }
+  }
+  // Backfill if the roster ever lacks a line, so the bench is always full.
+  for (const v of [...ROSTER].sort((a, b) => overallOf(b) - overallOf(a))) {
+    if (out.length >= size) break;
+    if (taken.has(v.id)) continue;
+    taken.add(v.id);
+    out.push(v.id);
+  }
+  return out;
+}
+
 const ROLE_ORDER: Role[] = ['GK', 'DEF', 'MID', 'FWD'];
 
 /** How badly a Viber's natural role fits a formation slot (0 = perfect). */
@@ -1077,8 +1121,17 @@ export interface OpponentSelection {
  * in, so a season match is against the club actually on the schedule rather
  * than whichever tier happens to match. The five is still built to the player's
  * level, so a fixture is a fair fight whoever it is against.
+ *
+ * `excludeIds` keeps Vibers off the opponent's five beyond the player's own
+ * starters — the bench in particular, so a Viber waiting on your bench is never
+ * simultaneously lining up against you.
  */
-export function autoOpponent(playerIds: string[], seed: number, clubId?: string): OpponentSelection {
+export function autoOpponent(
+  playerIds: string[],
+  seed: number,
+  clubId?: string,
+  excludeIds: string[] = [],
+): OpponentSelection {
   const target = teamOverall(playerIds);
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
 
@@ -1098,7 +1151,7 @@ export function autoOpponent(playerIds: string[], seed: number, clubId?: string)
     return ids;
   };
 
-  const taken = new Set(playerIds);
+  const taken = new Set([...playerIds, ...excludeIds]);
   const ids = build(ROSTER.filter((v) => !taken.has(v.id)));
 
   // Top up: if the distinct squad still rates below the player's, upgrade the

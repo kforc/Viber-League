@@ -6,7 +6,7 @@ export * from './constants';
 export { v2, dist, clamp, len, norm, sub, add, scale } from './core/math';
 export { makeRng } from './core/rng';
 export { createWorld, resetPositions } from './world';
-export { step, drainEvents, queue, currentMinute } from './engine';
+export { step, drainEvents, queue, flushCommands, substitute, currentMinute } from './engine';
 export { opponentGoalPos, ownGoalPos } from './ai';
 export {
   beginSetPiece,
@@ -26,6 +26,8 @@ export {
   teamOverall,
   buildLineup,
   autoOpponent,
+  autoBench,
+  BENCH_SIZE,
   SLOT_ROLES,
   type ViberCharacter,
   type ViberDesign,

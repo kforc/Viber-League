@@ -5,7 +5,16 @@ import { clamp, v2 } from './core/math';
 import { BALL_RADIUS, MENTALITY_SHAPE, PITCH_HALF_L, PITCH_HALF_W } from './constants';
 import { CLUBS, FORMATIONS } from './content';
 import { buildLineup, ROSTER_BY_ID, type LineupSlot } from './roster';
-import type { MatchConfig, Player, Role, Team, TeamId, ViberId, World } from './types';
+import type {
+  BenchPlayer,
+  MatchConfig,
+  Player,
+  Role,
+  Team,
+  TeamId,
+  ViberId,
+  World,
+} from './types';
 
 let nextPlayerId = 1;
 
@@ -62,6 +71,17 @@ function makePlayers(team: Team, lineup: LineupSlot[]): Player[] {
   return out;
 }
 
+/** Turn a list of bench Viber ids into the bench the match actually carries. */
+function makeBench(ids: string[]): BenchPlayer[] {
+  const out: BenchPlayer[] = [];
+  for (const id of ids) {
+    const v = ROSTER_BY_ID[id];
+    if (!v) continue;
+    out.push({ viber: v.id, name: v.name, role: v.role, attrs: { ...v.attrs } });
+  }
+  return out;
+}
+
 export function createWorld(config: MatchConfig): World {
   nextPlayerId = 1;
   const home = makeTeam(0, 'vibe_united', true);
@@ -69,6 +89,9 @@ export function createWorld(config: MatchConfig): World {
   const homeLineup = buildLineup(config.homeIds);
   const awayLineup = buildLineup(config.awayIds);
   const players = [...makePlayers(home, homeLineup), ...makePlayers(away, awayLineup)];
+  // Only the human's side carries a bench. The CPU does not rotate, so giving
+  // it one would be dead weight the renderer and the UI both have to skip.
+  const bench: [BenchPlayer[], BenchPlayer[]] = [makeBench(config.benchIds ?? []), []];
 
   const world: World = {
     seed: config.seed,
@@ -93,6 +116,8 @@ export function createWorld(config: MatchConfig): World {
     },
     players,
     teams: [home, away],
+    bench,
+    subsMade: [0, 0],
     stats: {
       shots: [0, 0],
       passes: [0, 0],

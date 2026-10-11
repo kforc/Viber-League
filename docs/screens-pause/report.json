@@ -8,12 +8,13 @@
     "paused": true,
     "buttons": [
       "Resume",
+      "Substitutions · 3",
       "Quit to League"
     ],
     "l": 192,
     "r": 652,
-    "sh": 295,
-    "ch": 295
+    "sh": 368,
+    "ch": 368
   },
   "confirm": {
     "buttons": [

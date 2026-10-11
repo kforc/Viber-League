@@ -4,13 +4,16 @@
 import { MatchRenderer } from '../render/renderer';
 import type { ShowcaseOptions } from '../render/showcase';
 import {
+  autoBench,
   autoOpponent,
   createWorld,
   drainEvents,
+  flushCommands,
   overallOf,
   PITCH_HALF_L,
   queue,
   ROSTER,
+  ROSTER_BY_ID,
   step,
   teamOverall,
   TICK,
@@ -42,6 +45,7 @@ import {
   renderSignIn,
   renderSquadSelect,
   renderSquadView,
+  renderSubs,
   renderTitle,
   renderViberDetail,
   renderWeather,
@@ -105,6 +109,7 @@ type AppState =
   | 'match'
   | 'penalty'
   | 'paused'
+  | 'subs'
   | 'halftime'
   | 'result';
 
@@ -151,6 +156,12 @@ export class Game {
   private weather: WeatherKind = 'sun';
   private halfSeconds = LENGTH_OPTIONS[1].halfSeconds;
   private opponent: OpponentSelection | null = null;
+  /**
+   * The bench that covers the current five. Recomputed whenever the five change
+   * (the squad screen, AUTO PICK, adopting a saved career), so it can never
+   * hold a Viber who has since been picked to start.
+   */
+  private bench: string[] = [];
   private detailId: string | null = null;
   private seed = 0;
   /** Which Viber the 3D hero stage is presenting. */
@@ -218,7 +229,8 @@ export class Game {
       this.seed = Number.isInteger(pinned) && pinned > 0
         ? pinned
         : Math.floor(Math.random() * 1e9);
-      this.opponent = autoOpponent(this.selected, this.seed);
+      this.bench = autoBench(this.selected);
+      this.opponent = autoOpponent(this.selected, this.seed, undefined, this.bench);
       this.startMatch();
     } else {
       this.bootstrap();
@@ -265,6 +277,7 @@ export class Game {
       this.selected = [...career.lineup];
       this.focusId = career.lineup[0];
     }
+    this.refreshBench();
     this.halfSeconds = career.settings.halfSeconds;
     this.applyReducedMotion(career.settings.reducedMotion);
     // Honour the saved sound setting before a context is ever built, so a muted
@@ -735,6 +748,19 @@ export class Game {
   /** The five are a career fact, not a per-match choice, so they are saved. */
   private commitLineup(): void {
     this.commitCareer(withLineup(this.career, this.selected));
+    this.refreshBench();
+  }
+
+  /**
+   * Rebuild the bench to cover the current five.
+   *
+   * Called from every path that can change the five. It has to be a rebuild and
+   * not a patch: a Viber who has just been promoted to the starting lineup must
+   * leave the bench, or the same player would be available to come on for
+   * themselves.
+   */
+  private refreshBench(): void {
+    this.bench = autoBench(this.selected);
   }
 
   private togglePick(id: string): void {
@@ -811,7 +837,10 @@ export class Game {
     // time a fixture is re-entered, but the *club* is the one on the schedule.
     this.seed = Math.floor(Math.random() * 1e9);
     const clubId = this.fixture ? opponentOf(this.fixture) : undefined;
-    this.opponent = autoOpponent(this.selected, this.seed, clubId);
+    // The bench is rebuilt here too, so the opponent is drawn against the five
+    // AND the bench actually carried into this match.
+    this.refreshBench();
+    this.opponent = autoOpponent(this.selected, this.seed, clubId, this.bench);
     clear(this.uiRoot);
     this.present(this.focus(), FRAMING.opponent);
     this.renderer.applyWeather(this.weather);
@@ -881,6 +910,7 @@ export class Game {
       awayClubId: this.opponent.club.id,
       weather: this.weather,
       halfSeconds: this.halfSeconds,
+      benchIds: this.bench.length ? this.bench : autoBench(this.selected),
     });
     this.halfTwoStarted = false;
 
@@ -944,7 +974,33 @@ export class Game {
         w.paused = false;
         this.state = 'match';
       },
+      onSubs: () => this.enterSubs(),
+      subsLeft: w.bench[0].length,
       onQuit: () => this.confirmQuit(),
+    });
+  }
+
+  /**
+   * The substitution screen.
+   *
+   * The world stays frozen throughout — a substitution is a squad change made
+   * while the ball is dead, not a play input. The command is queued and then
+   * drained immediately (`flushCommands`), so the bench and the five on the
+   * pitch update in front of the manager the moment a swap is made, without the
+   * match clock moving a tick.
+   */
+  private enterSubs(): void {
+    const w = this.world;
+    if (!w) return;
+    this.state = 'subs';
+    renderSubs(this.overlay, w, {
+      onSub: (outId: number, inViber: string) => {
+        queue(w, { type: 'sub', team: 0, out: outId, in: inViber });
+        flushCommands(w);
+        // Re-render from the world that just changed.
+        this.enterSubs();
+      },
+      onBack: () => this.enterPauseMenu(),
     });
   }
 
@@ -1036,6 +1092,14 @@ export class Game {
           // pattern for each.
           this.sound.whistle(ev.kind);
           break;
+        case 'sub': {
+          // A substitution made while paused sits in the event queue until play
+          // resumes, so this lands as the manager returns to the pitch — which
+          // is exactly when the confirmation is useful.
+          const v = ROSTER_BY_ID[ev.in];
+          if (v) this.hud?.showBanner(`${v.name} ON`, 'special');
+          break;
+        }
         case 'foul':
           // The restart banner that follows carries the message.
           break;

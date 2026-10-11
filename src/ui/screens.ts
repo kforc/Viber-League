@@ -1621,10 +1621,10 @@ export function renderPenaltyShoot(
 /* 8b. Pause menu                                                      */
 /* ------------------------------------------------------------------ */
 
-/** Mid-match pause: resume, or abandon the match back to the league. */
+/** Mid-match pause: rotate the squad, resume, or abandon the match. */
 export function renderPause(
   root: HTMLElement,
-  opts: { onResume: () => void; onQuit: () => void },
+  opts: { onResume: () => void; onSubs: () => void; onQuit: () => void; subsLeft: number },
 ): void {
   clear(root);
   const wrap = el('div', 'screen overlay-screen pause-screen');
@@ -1635,10 +1635,20 @@ export function renderPause(
   const resume = el('button', 'menu-btn primary', 'Resume');
   resume.type = 'button';
   on(resume, 'click', opts.onResume);
+  // Substitutions read as a live option, not a dead tile: the count is on the
+  // button so the manager can see at a glance how many they have left.
+  const subs = el(
+    'button',
+    'menu-btn',
+    opts.subsLeft > 0 ? `Substitutions · ${opts.subsLeft}` : 'Substitutions',
+  );
+  subs.type = 'button';
+  subs.disabled = opts.subsLeft <= 0;
+  on(subs, 'click', opts.onSubs);
   const quit = el('button', 'menu-btn danger', 'Quit to League');
   quit.type = 'button';
   on(quit, 'click', opts.onQuit);
-  row.append(resume, quit);
+  row.append(resume, subs, quit);
   panel.append(row);
   wrap.append(panel);
   root.append(wrap);
@@ -1665,6 +1675,136 @@ export function renderPauseConfirm(
   panel.append(row);
   wrap.append(panel);
   root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 8c. Substitutions                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The substitution screen.
+ *
+ * Two lists and one rule: pick who comes off, then who comes on. The choice is
+ * held here rather than in the app because it is a half-finished interaction —
+ * selecting a player off the pitch is not a decision until a replacement is
+ * chosen, and nothing outside this screen needs to know about it.
+ *
+ * The squad is read straight from the world, so a substitution is visible the
+ * instant it is made: the app applies the command and re-renders this screen
+ * from the updated bench.
+ */
+export function renderSubs(
+  root: HTMLElement,
+  world: World,
+  opts: { onSub: (outId: number, inViber: string) => void; onBack: () => void },
+): void {
+  let selectedOut: number | null = null;
+
+  const roleFull = (r: string): string =>
+    r === 'GK' ? 'Goalkeeper' : r === 'DEF' ? 'Defender' : r === 'MID' ? 'Midfielder' : 'Forward';
+
+  const rowFor = (
+    viber: string,
+    roleLabel: string,
+    name: string,
+    opts2: { onClick?: () => void; selected?: boolean; dim?: boolean },
+  ): HTMLElement => {
+    const row = el('button', 'sub-row');
+    row.type = 'button';
+    if (opts2.selected) row.classList.add('selected');
+    if (opts2.dim) row.classList.add('dim');
+    if (!opts2.onClick) row.disabled = true;
+
+    const v = ROSTER_BY_ID[viber];
+    row.append(el('span', `sub-role role-${roleLabel}`, roleLabel));
+    if (v) row.append(viberAvatar(v, 0.36));
+    const id = el('div', 'sub-id');
+    id.append(el('span', 'sub-name', name), el('span', 'sub-role-name', roleFull(roleLabel)));
+    row.append(id);
+    row.append(el('span', 'sub-ovr', v ? String(overallOf(v)) : '--'));
+    if (opts2.onClick) on(row, 'click', opts2.onClick);
+    return row;
+  };
+
+  const draw = (): void => {
+    clear(root);
+    const wrap = el('div', 'screen overlay-screen subs-screen');
+    const panel = el('div', 'panel subs-panel');
+
+    // The way out lives in the header, not below the lists. Five squad rows and
+    // a bench have to fit a 390px-tall landscape phone, and a full-width button
+    // under them was the difference between fitting and scrolling.
+    const head = el('div', 'subs-head');
+    head.append(el('h2', 'panel-title', 'Substitutions'));
+    const back = el('button', 'menu-btn subs-back', selectedOut === null ? 'Back' : 'Cancel');
+    back.type = 'button';
+    on(back, 'click', () => {
+      // A pending selection is cleared first: BACK leaves the screen, it does
+      // not silently abandon a half-made substitution.
+      if (selectedOut !== null) {
+        selectedOut = null;
+        draw();
+        return;
+      }
+      opts.onBack();
+    });
+    head.append(back);
+    panel.append(head);
+
+    const onPitch = world.players.filter((p) => p.team === 0);
+    const bench = world.bench[0];
+    const total = world.subsMade[0] + bench.length;
+    panel.append(
+      el(
+        'p',
+        'panel-sub',
+        bench.length
+          ? `${world.subsMade[0]} of ${total} used. Pick a player to take off, then their replacement.`
+          : 'No substitutes left.',
+      ),
+    );
+
+    const body = el('div', 'subs-body');
+
+    // --- On the pitch ---
+    const outCol = el('div', 'subs-col');
+    outCol.append(el('h3', 'subs-col-title', 'On the pitch'));
+    for (const p of onPitch) {
+      outCol.append(
+        rowFor(p.viber, p.role, p.name, {
+          selected: selectedOut === p.id,
+          onClick: () => {
+            selectedOut = selectedOut === p.id ? null : p.id;
+            draw();
+          },
+        }),
+      );
+    }
+
+    // --- Bench ---
+    const inCol = el('div', 'subs-col');
+    inCol.append(el('h3', 'subs-col-title', 'Bench'));
+    if (!bench.length) {
+      inCol.append(el('p', 'subs-empty', 'The bench is empty.'));
+    }
+    for (const b of bench) {
+      const canBringOn = selectedOut !== null;
+      inCol.append(
+        rowFor(b.viber, b.role, b.name, {
+          dim: !canBringOn,
+          onClick: canBringOn ? () => opts.onSub(selectedOut as number, b.viber) : undefined,
+        }),
+      );
+    }
+
+    body.append(outCol, inCol);
+    panel.append(body);
+
+    wrap.append(panel);
+    root.append(wrap);
+  };
+
+  draw();
 }
 
 /* ------------------------------------------------------------------ */

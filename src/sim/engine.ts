@@ -48,7 +48,7 @@ import { bestPassTarget, updateAI } from './ai';
 import { awardFromOutOfPlay, restartTaker, runSetPiece } from './setpiece';
 import { resetPositions } from './world';
 import { weatherMods } from './weather';
-import type { Command, Player, TeamId, World } from './types';
+import type { Command, Player, TeamId, ViberId, World } from './types';
 
 export function currentMinute(w: World): number {
   return clamp(
@@ -297,6 +297,58 @@ function tryKeeperSave(w: World, before: Vec2, b: World['ball']): void {
   // Otherwise the keeper is beaten all ends up — it is a goal.
 }
 
+/**
+ * Bring a substitute on for an on-pitch player.
+ *
+ * The incoming Viber takes over the outgoing player's identity in the world —
+ * the same id, team, slot, position and role — so nothing else has to be
+ * rebuilt. The ball's owner, the set-piece taker and the renderer's rigs are
+ * all keyed by id, and that id does not change; only the Viber, their name and
+ * their attributes swap, which is exactly what a substitution is.
+ *
+ * The slot keeps its role. A forward who comes on for a defender plays at the
+ * back, out of position, with their own attributes — the way it works on a real
+ * pitch, and the reason a bench is built to cover each line.
+ *
+ * Returns false when the substitution is not possible (unknown player, a
+ * substitute who is not on the bench), so a spoofed or stale command is a no-op
+ * rather than a corrupt squad.
+ */
+export function substitute(w: World, team: TeamId, outId: number, inViber: ViberId): boolean {
+  const player = w.players.find((p) => p.id === outId && p.team === team);
+  if (!player) return false;
+  const bench = w.bench[team];
+  const idx = bench.findIndex((b) => b.viber === inViber);
+  if (idx < 0) return false;
+
+  const incoming = bench[idx];
+  player.viber = incoming.viber;
+  player.name = incoming.name;
+  player.attrs = { ...incoming.attrs };
+  bench.splice(idx, 1);
+  w.subsMade[team] += 1;
+  w.events.push({ type: 'sub', team, out: outId, in: incoming.viber });
+  return true;
+}
+
+/**
+ * Apply every queued command without advancing the world.
+ *
+ * `step()` cannot be used for this: it returns early while the match is paused,
+ * and the pause menu — where a substitution is made — is exactly when the world
+ * is paused. Draining the queue directly lets the substitution screen read the
+ * squad back immediately instead of showing a stale bench, while keeping the
+ * command the one way into the sim.
+ *
+ * Only ever called by the app for roster commands; the tick boundary in `step()`
+ * is still the path every other command takes.
+ */
+export function flushCommands(w: World): void {
+  if (!w.pending.length) return;
+  for (const c of w.pending) applyCommand(w, c);
+  w.pending.length = 0;
+}
+
 function applyCommand(w: World, c: Command): void {
   switch (c.type) {
     case 'mentality':
@@ -338,6 +390,10 @@ function applyCommand(w: World, c: Command): void {
           w.teams[c.team].isHuman) {
         w.penaltyAim = c.value;
       }
+      break;
+    case 'sub':
+      // Only the human rotates: the CPU has no bench and no coach to use it.
+      if (w.teams[c.team].isHuman) substitute(w, c.team, c.out, c.in);
       break;
     case 'resume':
       if (w.phase === 'halftime') {
@@ -440,10 +496,7 @@ export function step(w: World, dt: number): void {
   w.tick += 1;
 
   // Drain commands at the tick boundary.
-  if (w.pending.length) {
-    for (const c of w.pending) applyCommand(w, c);
-    w.pending.length = 0;
-  }
+  flushCommands(w);
 
   // Phase timers
   if (w.phase === 'kickoff') {

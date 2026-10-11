@@ -23,6 +23,11 @@ export interface MatchConfig {
   weather: WeatherKind;
   /** Real seconds per half. */
   halfSeconds: number;
+  /**
+   * Substitutes available to the human's side. Optional: a match with no bench
+   * simply cannot make a substitution. See `autoBench` for the default bench.
+   */
+  benchIds?: string[];
 }
 
 export type Decision =
@@ -70,6 +75,21 @@ export interface Attributes {
   passing: number;
   tackling: number;
   technique: number;
+}
+
+/**
+ * A Viber waiting on the bench.
+ *
+ * Deliberately NOT a `Player`: a substitute is not in the world until they come
+ * on, so they have no position, no velocity and no AI state — giving them a
+ * Player would mean a rig on the pitch that nobody can see. Everything needed
+ * to *become* a player is here.
+ */
+export interface BenchPlayer {
+  viber: ViberId;
+  name: string;
+  role: Role;
+  attrs: Attributes;
 }
 
 export interface Player {
@@ -164,7 +184,9 @@ export type SimEvent =
    * short blast to start play reads nothing like the long one that ends the
    * match, and the sim is the only place that knows which is which.
    */
-  | { type: 'whistle'; kind: WhistleKind };
+  | { type: 'whistle'; kind: WhistleKind }
+  /** A Viber came on for another. `out` is the id they replaced. */
+  | { type: 'sub'; team: TeamId; out: number; in: ViberId };
 
 export type WhistleKind = 'kickoff' | 'goal' | 'foul' | 'halftime' | 'fulltime';
 
@@ -174,6 +196,12 @@ export type Command =
   | { type: 'action'; team: TeamId; value: 'shoot' | 'pass' | 'clear' }
   | { type: 'dive'; team: TeamId; value: DiveDirection }
   | { type: 'shot'; team: TeamId; value: DiveDirection }
+  /**
+   * Bring a substitute on. `out` is the on-pitch player's id and `in` the bench
+   * Viber's id. Applied by `substitute()`; the roster change is the only thing
+   * a substitution does.
+   */
+  | { type: 'sub'; team: TeamId; out: number; in: ViberId }
   | { type: 'resume' }
   | { type: 'pause'; value: boolean };
 
@@ -192,6 +220,14 @@ export interface World {
   ball: Ball;
   players: Player[];
   teams: [Team, Team];
+  /**
+   * Substitutes available to each team (index 0 = the human's side). A Viber
+   * leaves this list the moment they come on; when it is empty, no further
+   * substitution is possible.
+   */
+  bench: [BenchPlayer[], BenchPlayer[]];
+  /** Substitutions already made, per team. */
+  subsMade: [number, number];
   stats: MatchStats;
   events: SimEvent[];
   rng: Rng;
