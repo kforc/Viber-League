@@ -132,25 +132,33 @@ function cardSlot(
   const card = el('button', `viber-card2 role-${v.role}`);
   if (opts.selected) card.classList.add('selected');
 
-  const badge = el('span', 'ovr-badge', String(overallOf(v)));
+  // Band 1 — the header. Rating on the left; the right corner is left free for
+  // the add control (a *sibling* element, because nesting a button inside this
+  // one would be invalid) and, once the Viber is picked, carries the squad slot
+  // they will take. The number appearing at all is the selection cue, so the
+  // state still reads for someone who cannot tell lime from the card fill.
+  const top = el('div', 'card-top');
+  top.append(el('span', 'ovr-badge', String(overallOf(v))));
+  if (opts.selected) top.append(el('span', 'card-pick', String(opts.index + 1)));
+  card.append(top);
 
+  // Band 2 — the art window.
   const art = el('div', 'card-art');
   art.append(viberAvatar(v, 1.15));
+  card.append(art);
 
+  // Band 3 — who they are.
   const meta = el('div', 'card-meta');
-  meta.append(
-    el('div', 'card-name', v.name),
-    el('div', 'card-epithet', v.epithet),
-    el('div', 'card-role', ROLE_LABEL[v.role]),
-  );
+  meta.append(el('div', 'card-name', v.name), el('div', 'card-epithet', v.epithet));
+  card.append(meta);
 
-  card.append(badge, art, meta);
-  if (opts.selected) {
-    card.append(el('span', 'pick-num', String(opts.index + 1)));
-    card.append(el('span', 'card-check', '✓'));
-    const shine = el('span', 'card-shine');
-    card.append(shine);
-  }
+  // Band 4 — the role, as a full-width bar. Pulled out of the name stack so it
+  // reads as a property of the card, not a third line of the name — and so the
+  // add control never lands on top of it, which is what made these cards look
+  // untidy next to the substitution rows.
+  card.append(el('div', 'card-role', ROLE_LABEL[v.role]));
+
+  if (opts.selected) card.append(el('span', 'card-shine'));
   on(card, 'click', opts.onOpen);
 
   const add = el('button', `card-add${opts.selected ? ' on' : ''}`, opts.selected ? '−' : '+');

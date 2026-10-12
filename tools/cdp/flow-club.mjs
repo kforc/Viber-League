@@ -389,6 +389,34 @@ check('every Viber is in the grid', allCards > 10, 'cards=' + allCards);
 check('the filter row lists every role', (await count('.chip-row .chip')) >= 5);
 check('the sort row is present', (await count('.sort-row .chip')) === 3);
 check('a card carries a rating badge', await exists('.viber-card2 .ovr-badge'));
+
+/*
+ * The card rail is a horizontal scroller with `overflow-y: hidden` and centred
+ * items, so a card taller than the rail is clipped at BOTH ends — the rating
+ * plate sliced at the top, the role bar gone at the bottom. The generic
+ * clipping check above cannot see it: the card is still well inside the
+ * viewport, it is the RAIL that is cutting it. Measure the two directly, so
+ * "the cards fit" is a number rather than a squint at a screenshot.
+ */
+const railFit = await evalJs(`(() => {
+  const rail = document.querySelector('.screen.hero-select .viber-grid');
+  const card = document.querySelector('.card-slot .viber-card2');
+  if (!rail || !card) return null;
+  const r = rail.getBoundingClientRect(), c = card.getBoundingClientRect();
+  return {
+    over: Math.round(Math.max(r.top - c.top, c.bottom - r.bottom)),
+    cardH: Math.round(c.height),
+    railH: Math.round(r.height),
+    // Only the landscape rail clips (overflow-y: hidden). In portrait the grid
+    // scrolls vertically and a tall card is reachable, not cut.
+    clips: getComputedStyle(rail).overflowY === 'hidden',
+    roleBar: !!card.querySelector('.card-role'),
+  };
+})()`);
+check('the card fits inside the rail instead of being clipped by it',
+  railFit != null && (!railFit.clips || railFit.over <= 1), JSON.stringify(railFit));
+check('the role bar survives the layout', railFit?.roleBar === true);
+
 await shot('05-players-all');
 
 await clickText('GK', '.chip-row .chip');
@@ -552,6 +580,25 @@ await clickText('Auto', 'button');
 await sleep(700);
 const picked = await evalJs(`document.querySelectorAll('.viber-card2.selected').length`);
 check('the auto pick selects five', picked === 5, 'selected=' + picked);
+
+/*
+ * A picked card lifts out of the row (a transform), and a transform does not
+ * change scrollHeight — so the clip detector above, which compares scrollHeight
+ * to clientHeight, is blind to it. The rail's `overflow-y: hidden` will still
+ * cut it off, though. Measure the lifted card against the rail directly.
+ */
+const pickedFit = await evalJs(`(() => {
+  const rail = document.querySelector('.screen.hero-select .viber-grid');
+  const card = document.querySelector('.card-slot .viber-card2.selected');
+  if (!rail || !card) return null;
+  const r = rail.getBoundingClientRect(), c = card.getBoundingClientRect();
+  return {
+    over: Math.round(Math.max(r.top - c.top, c.bottom - r.bottom)),
+    clips: getComputedStyle(rail).overflowY === 'hidden',
+  };
+})()`);
+check('a picked card is not clipped by the rail either',
+  pickedFit != null && (!pickedFit.clips || pickedFit.over <= 1), JSON.stringify(pickedFit));
 await shot('11-squad-picked');
 
 await click('.primary-btn');

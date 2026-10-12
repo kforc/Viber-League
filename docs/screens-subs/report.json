@@ -6,7 +6,7 @@
   "start": {
     "state": "match",
     "paused": false,
-    "clock": 0,
+    "clock": 0.05,
     "subsMade": 0,
     "bench": [
       {
@@ -14,11 +14,11 @@
         "role": "DEF"
       },
       {
-        "viber": "azure",
+        "viber": "cobalt",
         "role": "MID"
       },
       {
-        "viber": "crimson",
+        "viber": "blaze",
         "role": "FWD"
       }
     ],
@@ -43,14 +43,14 @@
       },
       {
         "id": 4,
-        "viber": "cobalt",
-        "name": "COBALT",
+        "viber": "azure",
+        "name": "AZURE",
         "role": "MID"
       },
       {
         "id": 5,
-        "viber": "blaze",
-        "name": "BLAZE",
+        "viber": "maroon",
+        "name": "MAROON",
         "role": "FWD"
       }
     ]
@@ -58,7 +58,7 @@
   "pause": {
     "state": "paused",
     "paused": true,
-    "clock": 0,
+    "clock": 0.11666666666666665,
     "buttons": [
       "Resume",
       "Substitutions · 3",
@@ -88,6 +88,23 @@
         "ovr": "79"
       },
       {
+        "name": "AZURE",
+        "role": "MID",
+        "ovr": "77"
+      },
+      {
+        "name": "MAROON",
+        "role": "FWD",
+        "ovr": "76"
+      }
+    ],
+    "bench": [
+      {
+        "name": "DIESEL",
+        "role": "DEF",
+        "ovr": "79"
+      },
+      {
         "name": "COBALT",
         "role": "MID",
         "ovr": "79"
@@ -98,23 +115,6 @@
         "ovr": "77"
       }
     ],
-    "bench": [
-      {
-        "name": "DIESEL",
-        "role": "DEF",
-        "ovr": "79"
-      },
-      {
-        "name": "AZURE",
-        "role": "MID",
-        "ovr": "77"
-      },
-      {
-        "name": "CRIMSON",
-        "role": "FWD",
-        "ovr": "76"
-      }
-    ],
     "l": 112,
     "r": 732,
     "t": 40.796875,
@@ -123,15 +123,15 @@
   "after": {
     "state": "subs",
     "paused": true,
-    "clock": 0,
+    "clock": 0.11666666666666665,
     "subsMade": 1,
     "bench": [
       {
-        "viber": "azure",
+        "viber": "cobalt",
         "role": "MID"
       },
       {
-        "viber": "crimson",
+        "viber": "blaze",
         "role": "FWD"
       }
     ],
@@ -156,14 +156,14 @@
       },
       {
         "id": 4,
-        "viber": "cobalt",
-        "name": "COBALT",
+        "viber": "azure",
+        "name": "AZURE",
         "role": "MID"
       },
       {
         "id": 5,
-        "viber": "blaze",
-        "name": "BLAZE",
+        "viber": "maroon",
+        "name": "MAROON",
         "role": "FWD"
       }
     ]
@@ -171,14 +171,14 @@
   "spent": {
     "state": "subs",
     "paused": true,
-    "clock": 0,
+    "clock": 0.11666666666666665,
     "subsMade": 3,
     "bench": [],
     "pitch": [
       {
         "id": 1,
-        "viber": "crimson",
-        "name": "CRIMSON",
+        "viber": "blaze",
+        "name": "BLAZE",
         "role": "GK"
       },
       {
@@ -195,14 +195,14 @@
       },
       {
         "id": 4,
-        "viber": "cobalt",
-        "name": "COBALT",
+        "viber": "azure",
+        "name": "AZURE",
         "role": "MID"
       },
       {
         "id": 5,
-        "viber": "blaze",
-        "name": "BLAZE",
+        "viber": "maroon",
+        "name": "MAROON",
         "role": "FWD"
       }
     ]

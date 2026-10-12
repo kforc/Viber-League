@@ -24,6 +24,21 @@ shipped as ONE self-contained `Viber-League.html`.
 - **No explanatory text under action buttons.**
 - Stock convention: price up = red, down = green (not used yet, but noted).
 
+## Legibility (added 2026-10-12)
+
+- **`--ink` is the LIGHT colour here (cream).** The reference project calls its
+  dark colour `--ink`, so the name is a trap: `color: var(--ink)` on a lime fill
+  is cream-on-lime = 1.04:1, an invisible label. **On lime, always `--on-lime`.**
+- Text must clear 4.5:1. `--ink-mute` is 0.55 alpha and `--ink-dim` 0.68; do not
+  go below those for anything a player has to read.
+- **Baloo 2's inline content area is ~1.36em.** Any `line-height` below that
+  makes `overflow: hidden` shave the glyphs, even for all-caps words. Use 1.4 on
+  clamped single-line labels.
+- Font-size floor is 9px. Text inputs must be 16px or iOS Safari zooms the
+  viewport on focus.
+- Selection state is carried by the **presence of a marker** (the squad slot
+  number), not by colour alone — colour-blind players must still read it.
+
 ## Brand
 
 - The official mark and the six club crests live in `src/brand.ts` as SVG path
@@ -48,6 +63,15 @@ shipped as ONE self-contained `Viber-League.html`.
 
 - `#ui button` is (1,0,1) and outranks every component class. Use
   `:where(#ui) button` for base button resets.
+- **Cascade ORDER beats specificity when both selectors are equal.** `.subs-panel`
+  silently lost to `.panel` (both 0,1,0) because `.panel` is declared later.
+  When a component style "does not apply", check declaration order before the
+  property. Same family as the `#ui button` trap above.
+- **A CSS `transform` does not change `scrollHeight`**, so any clip detector that
+  compares `scrollHeight` to `clientHeight` is BLIND to transform overflow. The
+  landscape card rail clips vertically (`overflow-x: auto` forces `overflow-y` to
+  clip) and the selected card's `translateY` was being cut — assert rail-vs-card
+  rects explicitly instead.
 - Headless Chrome runs WebGL in software: a match is ~0.2× real time and one
   frame can be ~700 ms. Poll in harnesses; never sleep a fixed amount.
 - `npm run shots` reports failure even when the harness passes — the sandbox
@@ -56,3 +80,6 @@ shipped as ONE self-contained `Viber-League.html`.
 - Run vitest with `NODE_OPTIONS=--max-old-space-size=256` and one file at a time.
   `tests/sim/match.test.ts` alone takes ~130 s.
 - Sandbox `/tmp` is ephemeral. Tooling lives in `tools/cdp/`.
+- **CDP probes must run SERIALLY** — two Chrome instances race port 9333.
+- The sandbox's Bash `grep` silently returned no matches on files/patterns the
+  Grep tool found fine. Prefer the Grep tool.

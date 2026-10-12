@@ -53,8 +53,13 @@
   /* `--ink` is the light text colour in this codebase (the reference calls its
      dark colour `--ink`), so it becomes cream rather than being renamed. */
   --ink: #f3e6c4;
-  --ink-dim: rgba(243, 230, 196, 0.62);
-  --ink-mute: rgba(243, 230, 196, 0.38);
+  /* Both dim steps were lifted for legibility. Cream at 0.38 alpha over the
+     panel is ~3.2:1 — under the 4.5:1 that normal-size text needs, and the
+     `.hint` / `.attr-k` / placeholder labels that use it are exactly the small
+     text people need to read. 0.55 lands at ~5.1:1, 0.68 at ~7:1: still clearly
+     a hierarchy below full cream, but no longer a squint. */
+  --ink-dim: rgba(243, 230, 196, 0.68);
+  --ink-mute: rgba(243, 230, 196, 0.55);
 
   /* ---- energy accents ----
      Viber lime is the brand. Everything else is an *effect* colour: the
@@ -517,23 +522,29 @@ body {
   animation: none;
 }
 
+/* The quick-add control. It is a SIBLING of the card — a button cannot legally
+   nest inside another button — so it is positioned against the slot and has to
+   be placed where the card leaves room for it, not where it looks best in
+   isolation. That is now the top-right corner, level with the rating plate. It
+   used to sit at the bottom-right, on top of the role bar, which is exactly
+   what made these cards look untidy beside the substitution rows. */
 .card-add {
   position: absolute;
-  right: 7px;
-  bottom: 7px;
-  width: 31px;
-  height: 31px;
+  top: 11px;
+  right: 11px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
   color: var(--on-lime);
   background: var(--lime);
   border: 3px solid var(--outline);
-  box-shadow: 0 3px 0 var(--outline), 0 0 14px var(--lime-glow);
+  box-shadow: 0 3px 0 var(--outline);
   z-index: 7;
   transition: transform 0.07s ease, box-shadow 0.07s ease;
 }
@@ -547,7 +558,7 @@ body {
 .card-add.on {
   color: #2a0606;
   background: #ff5b5b;
-  box-shadow: 0 3px 0 var(--outline), 0 0 14px rgba(255, 91, 91, 0.6);
+  box-shadow: 0 3px 0 var(--outline);
 }
 
 .card-add:disabled {
@@ -560,9 +571,12 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 9px 11px;
+  /* `stretch`, not `center`: the card is now built from full-width bands (the
+     header row, the art window, the role bar) instead of a centred pile of
+     inline bits. That is what makes it read as neatly as a substitution row. */
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 9px 10px;
   border-radius: var(--r-lg);
   text-align: center;
   isolation: isolate;
@@ -583,6 +597,18 @@ body {
   animation-delay: calc(min(var(--i, 0), 11) * 26ms);
 }
 
+/* Band 1 — rating left, add-control corner reserved right. The `padding-right`
+   is not decoration: it holds the slot the absolutely-positioned `.card-add`
+   occupies, so the rating plate and the slot number can never slide under it. */
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  min-height: 34px;
+  padding-right: 34px;
+}
+
 /* Strong coloured accent across the top — the role light. */
 .viber-card2::before {
   content: '';
@@ -595,12 +621,14 @@ body {
   z-index: 3;
 }
 
-/* Inner floor glow under the character's feet. */
-.viber-card2::after {
+/* Inner floor glow under the character's feet. Anchored to the art band, not to
+   the card: the card's bottom now carries the name and the role bar, so an
+   offset measured from the card edge would drift with every text change. */
+.card-art::after {
   content: '';
   position: absolute;
   left: 50%;
-  bottom: 44px;
+  bottom: 0;
   width: 96px;
   height: 22px;
   transform: translateX(-50%);
@@ -654,51 +682,37 @@ body {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
 }
 
-.card-check {
-  position: absolute;
-  top: -9px;
-  right: -9px;
-  width: 32px;
-  height: 32px;
+/* The squad slot this Viber will take (1 = GK … 5 = FWD). Shown only once the
+   card is picked, so its *presence* — not its colour — is the "this one is in"
+   cue, which keeps the state readable for anyone who cannot separate the lime
+   frame from the card fill. The old design ALSO stamped a green tick in the
+   opposite corner; two markers for one fact was most of why these cards read as
+   cluttered next to the substitution rows. */
+.card-pick {
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  font-size: 16px;
-  font-weight: 900;
-  color: #06210f;
-  background: linear-gradient(180deg, #8bf5b4, #22c55e 60%, #15803d);
-  border: 3px solid #04140a;
-  box-shadow: 0 0 18px rgba(61, 220, 132, 0.9);
-  z-index: 6;
-  animation: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.pick-num {
-  position: absolute;
-  top: 11px;
-  right: 10px;
   width: 26px;
   height: 26px;
-  display: grid;
-  place-items: center;
+  flex-shrink: 0;
   border-radius: 50%;
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 900;
-  color: #10170a;
-  background: linear-gradient(180deg, #e8ff7a, var(--lime) 55%, var(--lime-deep));
-  border: 2.5px solid #0a0a12;
-  box-shadow: 0 0 14px var(--lime-glow);
-  z-index: 5;
+  color: var(--on-lime);
+  background: var(--lime);
+  border: 2.5px solid var(--outline);
+  box-shadow: 0 2px 0 var(--outline);
+  animation: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ---- character art inside the card ---- */
 .card-art {
   position: relative;
-  height: 96px;
+  height: 92px;
   width: 100%;
   display: grid;
   place-items: center;
+  margin-top: 3px;
   z-index: 1;
 }
 
@@ -719,20 +733,34 @@ body {
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
 }
 
+/* Band 3 — the identity. Both lines are clamped to one line so a long name or
+   epithet can never make one card taller than its neighbours; the grid stays
+   flush, which is most of what "neat" means here.
+
+   The line-height is 1.4, not the tighter 1.15 this started at, and that is a
+   correctness fix rather than a taste one: Baloo 2's inline content area is
+   ~1.36em, so a line-height below that makes the children's `overflow: hidden`
+   shave 3px off the glyphs — measured as `scrollHeight 19` in a `clientHeight
+   16` box. 1.4 clears the content area with a little margin at every size the
+   card uses (14px here, 12px in the landscape rail). */
 .card-meta {
   position: relative;
   z-index: 2;
-  line-height: 1.12;
+  margin-top: 5px;
+  line-height: 1.4;
 }
 
 .card-name {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--cream);
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-epithet {
@@ -741,31 +769,45 @@ body {
   font-weight: 700;
   font-style: italic;
   color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Band 4 — the role, as a full-width bar. It is the card's footer, not a third
+   line of the name: a bar reads as a property of the whole card, and it cannot
+   be landed on by the add control the way a centred pill could. */
 .card-role {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 3px 9px;
+  display: block;
+  margin-top: 7px;
+  padding: 5px 8px;
   border-radius: 999px;
   font-family: var(--font-display);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.08em;
+  text-align: center;
   text-transform: uppercase;
   color: #06080f;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), var(--role, var(--lime)));
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ==========================================================================
    Rating badges
    ========================================================================== */
 
+/* The rating plate. In flow by default — it belongs to whatever header row it
+   is dropped into (a player card, the hero name plate) — and pinned to a corner
+   only where a component explicitly asks for it (.squad-card does).
+   The `badgePulse` animation is gone: a dozen plates pulsing out of phase was
+   gratuitous motion on a screen that should read as a still, tidy grid. */
 .ovr-badge {
-  position: absolute;
-  top: 13px;
-  left: 10px;
+  display: inline-grid;
+  place-items: center;
   min-width: 42px;
   padding: 4px 8px 5px;
   border-radius: var(--r-sm);
@@ -780,7 +822,15 @@ body {
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55), 0 0 16px var(--role-glow, rgba(255, 255, 255, 0.4));
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
   z-index: 5;
-  animation: badgePulse 2.8s ease-in-out infinite;
+}
+
+/* Scaled down for a card header, where the plate shares the row with the add
+   control and — once picked — the slot number. */
+.card-top .ovr-badge {
+  min-width: 36px;
+  padding: 3px 7px 4px;
+  font-size: 16px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
 }
 
 .role-GK {
@@ -844,7 +894,7 @@ body {
 
 .primary-btn.disabled,
 .primary-btn:disabled {
-  color: rgba(243, 230, 196, 0.32);
+  color: rgba(243, 230, 196, 0.5);
   background: rgba(11, 18, 32, 0.85);
   border-color: var(--outline);
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
@@ -1378,6 +1428,14 @@ body {
   padding-bottom: calc(10px + var(--safe-b));
 }
 
+/* Landscape: the card rail is the flexible row, so the screen's own bottom
+   padding comes straight off the cards. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .screen.hero-select {
+    padding-bottom: calc(6px + var(--safe-b));
+  }
+}
+
 .screen.hero-select .viber-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -1730,7 +1788,7 @@ body {
    from its parent button. Two unrelated components, one class name. */
 .special-box .special-label {
   font-family: var(--font-display);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: 0.2em;
   color: var(--lime);
@@ -2380,7 +2438,7 @@ body {
 
 .lt-head {
   font-family: var(--font-display);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2556,7 +2614,7 @@ body {
 
 .squad-slot-role {
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -2629,7 +2687,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 8px;
+  font-size: 9.5px;
   font-weight: 700;
   font-style: italic;
   color: var(--ink-mute);
@@ -2736,7 +2794,7 @@ body {
 }
 
 .stat-label {
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -3181,7 +3239,7 @@ body {
   padding: 2px 7px;
   border-radius: 999px;
   font-family: var(--font-display);
-  font-size: 7.5px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3302,7 +3360,11 @@ body {
 .menu-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--outline); }
 .menu-btn.primary {
   background: var(--lime);
-  color: var(--ink);
+  /* NOT `var(--ink)`. `--ink` is this codebase's *light* text colour (cream),
+     so the lime RESUME button was cream-on-lime: 1.04:1, i.e. a blank yellow
+     bar with a ghost in it. Every other lime surface uses `--on-lime`; this was
+     the one that did not. 16.3:1 now. */
+  color: var(--on-lime);
   border-color: var(--outline);
   box-shadow: 0 4px 0 var(--outline), 0 0 16px rgba(223, 249, 2, 0.16);
 }
@@ -3312,7 +3374,9 @@ body {
   box-shadow: 0 4px 0 #3a0d10;
 }
 .menu-btn:disabled {
-  opacity: 0.42;
+  /* Was 0.42, which put the label under the contrast floor. Disabled controls
+     are exempt from WCAG, but "Spent" still has to be readable to be useful. */
+  opacity: 0.58;
   cursor: not-allowed;
 }
 
@@ -3645,7 +3709,7 @@ body {
 }
 
 .panel-title.defeat {
-  background: linear-gradient(180deg, #ffb0b0, #ef4444 60%, #991b1b);
+  background: linear-gradient(180deg, #ffb0b0, #ef4444 60%, #cf4444);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -3654,7 +3718,7 @@ body {
 
 /* A draw is neither a win nor a defeat: neutral steel, not a third brand colour. */
 .panel-title.draw {
-  background: linear-gradient(180deg, #eef3ea, #a8b7a2 60%, #5d6b57);
+  background: linear-gradient(180deg, #eef3ea, #b9c7b3 60%, #8b9c84);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -3828,7 +3892,7 @@ body {
 
 .half {
   font-family: var(--font-display);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -4462,7 +4526,7 @@ body {
     border-radius: var(--r-md);
   }
   .play-btn .play-sub {
-    font-size: 8.5px;
+    font-size: 9px;
     margin-top: 1px;
   }
   /* The five "Soon" tiles become one row so they stop eating the hero band. */
@@ -4475,7 +4539,7 @@ body {
     max-width: none;
     padding: 7px 3px 6px;
     gap: 2px;
-    font-size: 8.5px;
+    font-size: 9.5px;
   }
   .menu-opt .ico {
     font-size: 15px;
@@ -4524,10 +4588,35 @@ body {
 
   .hero-select .chip-row {
     gap: 6px;
+    /* Both chip rows are above the card rail, and every pixel they take comes
+       straight out of the cards. */
+    padding: 1px 0 2px;
   }
   .hero-select .chip {
-    padding: 5px 10px;
+    /* Still taller than the 5px this used to be — a comfortable target — but
+       trimmed from 8px, which cost the rail 8px it could not spare. */
+    padding: 6px 11px;
+    font-size: 10px;
+  }
+  /* The 0/5 counter is a readout, not a control, and at 68px it was the single
+     largest thing in the header — 68px of a 390px screen. 52px still reads. */
+  .hero-select .pick-ring {
+    width: 52px;
+    height: 52px;
+  }
+  .hero-select .pick-ring .ring-label b {
+    font-size: 18px;
+  }
+  .hero-select .pick-ring .ring-label i {
     font-size: 9.5px;
+    margin-bottom: 3px;
+  }
+  /* The CTA keeps its full-width prominence; it just stops being 50px tall. */
+  .hero-select .flow-actions {
+    padding-top: 4px;
+  }
+  .hero-select .flow-actions .primary-btn {
+    padding: 11px 18px;
   }
 
   /*
@@ -4548,7 +4637,13 @@ body {
     min-height: 0;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 2px 8px;
+    /* The vertical padding is asymmetric ON PURPOSE. A picked card lifts out of
+       the row (see `.viber-card2.selected`), and the rail has to clip that lift
+       — `overflow-x: auto` forces `overflow-y` to clip too, so the rail can
+       never simply let it show. Biasing the padding to the top buys the lift its
+       headroom: the card's centred position moves down, leaving 5px above it
+       inside the rail instead of 3px below it. */
+    padding: 5px 2px 3px;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -4556,41 +4651,91 @@ body {
   .screen.hero-select .viber-grid::-webkit-scrollbar {
     display: none;
   }
+  /*
+   * THE CARD RAIL BUDGET — measured, not guessed.
+   *
+   * The rail is a horizontal scroller with `overflow-y: hidden` and
+   * `align-items: center`, so a card taller than the rail is clipped at BOTH
+   * ends. On a 390px-tall phone the rail was left 114px (102px of content box)
+   * while the card measured 181px: 35px cut off the top and 31px off the
+   * bottom, which sliced the rating plate in half and removed the role bar
+   * entirely. The card was not too big — the chrome above it was.
+   *
+   * So the height is reclaimed from the chrome first (see the pick-ring, chip
+   * and footer rules below), and the card is then sized to what is left.
+   */
   .hero-select .card-slot {
-    flex: 0 0 118px;
+    /* Wider than the old 118px. The card now reserves a corner for the add
+       control and carries a full-width role bar, and at 118px those two were
+       fighting for the same pixels. */
+    flex: 0 0 132px;
     scroll-snap-align: start;
   }
   .hero-select .viber-card2 {
-    padding: 10px 7px 8px;
-    gap: 3px;
+    padding: 6px 6px;
+  }
+  .hero-select .card-top {
+    min-height: 24px;
+    padding-right: 28px;
+  }
+  .hero-select .card-top .ovr-badge {
+    min-width: 28px;
+    padding: 2px 6px 3px;
+    font-size: 13px;
+  }
+  .hero-select .card-pick {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
   }
   .hero-select .card-art {
-    height: 72px;
+    height: 50px;
+    margin-top: 2px;
   }
   .hero-select .card-art::before {
-    width: 80px;
-    height: 80px;
+    width: 58px;
+    height: 58px;
   }
-  .hero-select .viber-card2::after {
-    bottom: 36px;
-    width: 74px;
-    height: 15px;
+  .hero-select .card-art::after {
+    width: 56px;
+    height: 12px;
+  }
+  /* `viberAvatar()` writes `--vv-scale` as an INLINE style, so only an
+     `!important` declaration can override it from here. At 1.15 the avatar is
+     80px tall — half the card's entire budget. */
+  .hero-select .card-art .vv-avatar {
+    --vv-scale: 0.68 !important;
+  }
+  .hero-select .card-meta {
+    margin-top: 3px;
   }
   .hero-select .card-name {
     font-size: 12px;
   }
   .hero-select .card-epithet {
-    font-size: 8.5px;
+    font-size: 9.5px;
   }
   .hero-select .card-role {
     margin-top: 3px;
-    padding: 2px 7px;
-    font-size: 8px;
+    padding: 3px 6px;
+    font-size: 9.5px;
   }
   .hero-select .card-add {
-    width: 26px;
-    height: 26px;
-    font-size: 15px;
+    top: 9px;
+    right: 9px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  /* A picked card lifts out of the row, and the rail's clip box is only a few
+     pixels taller than the card. The base state lifts 5px AND scales 1.035,
+     which together need ~7.7px of headroom the rail does not have — the top of
+     the card (the rating plate and its border) was being cut off. 4px with no
+     scale fits the headroom exactly, and the lime border, the tinted fill and
+     the slot number already carry the selected state on their own. */
+  .hero-select .viber-card2.selected {
+    transform: translateY(-4px);
   }
 
   /* --- Venue picker: preview left, venue list right.
@@ -4737,11 +4882,14 @@ body {
     grid-template-columns: 1fr;
   }
   .field-label {
-    font-size: 8.5px;
+    font-size: 9.5px;
   }
   .text-input {
     padding: 8px 11px;
-    font-size: 14px;
+    /* 16px is not a taste call: iOS Safari zooms the whole viewport in when a
+       field with smaller type takes focus, and the player is left on a
+       magnified, off-centre screen with no way back but a pinch. */
+    font-size: 16px;
     box-shadow: 0 3px 0 var(--outline);
   }
   .text-input:focus {
@@ -4832,5 +4980,94 @@ body {
   }
   .sheet {
     max-height: 74vh;
+  }
+}
+
+/* ==========================================================================
+   INCLUSIVENESS
+   --------------------------------------------------------------------------
+   So that someone on a keyboard, someone who cannot separate the lime from the
+   green, and someone whose device has been asked for more contrast can all play
+   the game. None of this changes it for anybody else.
+   ========================================================================== */
+
+/* ---- keyboard focus ----
+   Every control in this game is a hand-painted button, so the browser's own
+   focus ring is either invisible against the dark panels or swallowed by the
+   thick black outlines. One explicit ring instead, in the brand lime. */
+:where(#ui) :is(button, a[href], input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+/* A lime ring around a lime fill is no ring at all — those flip to cream, which
+   reads against both the fill and the panel behind it. */
+:where(#ui) :is(
+    .primary-btn,
+    .menu-btn.primary,
+    .card-add,
+    .chip.active,
+    .seg-btn.active,
+    .mentality-btn.active,
+    .action-btn.pass,
+    .special-btn,
+    .setpiece-chip,
+    .venue-chip
+  ):focus-visible {
+  outline-color: var(--cream);
+}
+
+/* PLAY is the first thing anyone tabs to, and the largest target on the
+   screen — give it a ring to match. */
+.play-btn:focus-visible {
+  outline-width: 4px;
+  outline-offset: 4px;
+}
+
+/* ---- the quick-add control needs a real hit area ----
+   It is the smallest control in the game and it decides who is in your five,
+   so a miss is expensive. 44px is the comfortable minimum. The visible button
+   stays the size the layout wants; the invisible target is centred on it, so
+   nothing moves and nothing overlaps a neighbouring card. */
+.card-add::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+/* ---- high contrast ----
+   `prefers-contrast: more` is the one accessibility preference a player can set
+   once in their OS and have every app honour. Lift the dim text toward full
+   cream, make the panels opaque, and drop the atmospheric scrim: at high
+   contrast the atmosphere is only noise between the text and its background. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-dim: rgba(243, 230, 196, 0.9);
+    --ink-mute: rgba(243, 230, 196, 0.78);
+    --panel: rgba(8, 11, 6, 0.99);
+    --panel-2: rgba(14, 18, 11, 0.99);
+    --rule: rgba(243, 230, 196, 0.34);
+    --hair: rgba(223, 249, 2, 0.45);
+  }
+  .screen {
+    background: linear-gradient(
+      180deg,
+      rgba(3, 4, 3, 0.97) 0%,
+      rgba(3, 4, 3, 0.9) 34%,
+      rgba(3, 4, 3, 0.9) 66%,
+      rgba(3, 4, 3, 0.97) 100%
+    );
+  }
+  .screen::before,
+  .screen::after {
+    display: none;
+  }
+  .overlay-screen {
+    background: rgba(4, 6, 5, 0.93);
   }
 }
