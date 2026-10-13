@@ -1,5 +1,5 @@
 // Dev-only: open the pause menu mid-match, verify Resume and Quit work, and
-// that quitting returns to the league without recording a result. Run after
+// that quitting returns to the TITLE without recording a result. Run after
 // `npm run bundle`:
 //   tools/cdp/run.sh tools/cdp/probe-pause.mjs docs/screens-pause
 import fs from 'node:fs';
@@ -88,8 +88,18 @@ const menu = await evaluate(`(() => {
 })()`);
 console.log('pause-menu', JSON.stringify(menu));
 check('pause opens the menu and freezes the match', menu.state === 'paused' && menu.paused);
-check('menu offers Resume and Quit to League',
-  menu.buttons.includes('Resume') && menu.buttons.includes('Quit to League'));
+/*
+ * The quit button is plain QUIT, and it means the same thing everywhere.
+ *
+ * It used to read "Quit to League", which was only ever true when the match had
+ * been entered from the league — a friendly entered from the Play screen came
+ * from nowhere near it. The control now always returns to the first page, so
+ * the label says what actually happens instead of naming one of the modes.
+ */
+check('menu offers Resume and a plain Quit',
+  menu.buttons.includes('Resume') && menu.buttons.includes('Quit'));
+check('the quit button does not name a destination',
+  !menu.buttons.some((b) => /quit to/i.test(b)), JSON.stringify(menu.buttons));
 check('pause panel fits horizontally', menu.l >= -1 && menu.r <= width + 1 && menu.sh <= menu.ch + 2);
 await screenshot('01-pause-menu');
 
@@ -102,7 +112,7 @@ check('Resume closes the menu and continues the match',
 // Open again and quit (with the confirm step).
 await evaluate('document.querySelector(".pause-btn").click()');
 await until('!!document.querySelector(".pause-panel")');
-await evaluate('document.querySelector(".menu-btn.danger").click()'); // Quit to League
+await evaluate('document.querySelector(".menu-btn.danger").click()'); // Quit
 await until('!!document.querySelector(".pause-panel") && document.body.textContent.includes("Quit match?")');
 const confirm = await evaluate(`(() => {
   const buttons = [...document.querySelectorAll('.menu-btn')].map((b) => b.textContent.trim());
@@ -115,10 +125,20 @@ await screenshot('02-quit-confirm');
 
 const resultsBefore = await evaluate('JSON.stringify(window.game.career?.results ?? null)');
 await evaluate('document.querySelector(".menu-btn.danger").click()'); // confirm quit
-await until('window.game.state === "league"');
-check('confirming quit returns to the league', await evaluate('window.game.state') === 'league');
+/*
+ * The title, not the league.
+ *
+ * Quit abandons the match and files nothing — but the old control dropped the
+ * player into the league hub regardless of where the match came from, which is
+ * the wrong place for a friendly and a strange place for anyone who just wanted
+ * out. The first page is the one destination that is true for both modes.
+ */
+await until('window.game.state === "title"');
+check('confirming quit returns to the title', await evaluate('window.game.state') === 'title');
+check('quitting filed no result',
+  (await evaluate('JSON.stringify(window.game.career?.results ?? null)')) === resultsBefore);
 check('the page reported no JavaScript exceptions', errors.length === 0);
-await screenshot('03-back-to-league');
+await screenshot('03-back-to-title');
 
 fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({
   viewport: [width, height], menu, confirm, resultsBefore, errors, failures,

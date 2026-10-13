@@ -32,7 +32,9 @@ import {
   renderAccountSheet,
   renderCareer,
   renderHalftime,
+  renderHelp,
   renderLeague,
+  renderLeagueGate,
   renderMinutes,
   renderModes,
   renderOnboarding,
@@ -86,8 +88,11 @@ import {
   currentSeasonSummary,
   defaultCareer,
   fitSquad,
+  hasStoredLeague,
   isAvailable,
+  leagueExists,
   loadCareer,
+  loadExistingLeague,
   newLeague,
   saveCareer,
   startNextSeason,
@@ -119,6 +124,7 @@ type AppState =
   | 'account'
   | 'title'
   | 'modes'
+  | 'help'
   | 'league'
   | 'squadview'
   | 'players'
@@ -407,6 +413,13 @@ export class Game {
   }
 
   private showLeague(): void {
+    // No league yet — offer to start one, or to carry on with the one already on
+    // the device. Showing the table here would present seven clubs on zero as
+    // though a competition had been played and nobody had turned up.
+    if (!leagueExists(this.career)) {
+      this.showLeagueGate();
+      return;
+    }
     this.state = 'league';
     clear(this.uiRoot);
     // The CPU half of the season is simulated on demand rather than stored, so
@@ -440,6 +453,40 @@ export class Game {
   }
 
   /**
+   * The choice before the table: start a league, or carry on with the one
+   * already stored.
+   *
+   * New League is destructive whenever a season is standing on the device, and
+   * the gate says so by arming itself for a second tap in that state. Load
+   * Existing League is the no-lost-progress door — it changes nothing about the
+   * stored season and only records that a league is live now. That is the whole
+   * answer for a save written before this gate existed: it still holds the
+   * season the manager was part way through, and this is how they get back into
+   * it rather than past it.
+   */
+  private showLeagueGate(): void {
+    this.state = 'league';
+    clear(this.uiRoot);
+    const stored = hasStoredLeague(this.career);
+    renderLeagueGate(this.uiRoot, {
+      canLoad: stored,
+      hasStored: stored,
+      onNewLeague: () => {
+        this.commitCareer(newLeague(this.career));
+        this.applyCareer(this.career);
+        this.showLeague();
+      },
+      onLoadExisting: () => {
+        this.commitCareer(loadExistingLeague(this.career));
+        this.applyCareer(this.career);
+        this.showLeague();
+      },
+      onBack: () => this.goBack(),
+    });
+    this.presentInBand(ROSTER[0], '.modes-spacer', FRAMING.menu, { maxFill: 0.46 });
+  }
+
+  /**
    * Opt into a new league: the table, the fixtures and the injury list start
    * from nothing. The club and the squad stay — that is the difference between
    * starting a new *league* and starting a new *club* (Settings → Erase career).
@@ -460,6 +507,12 @@ export class Game {
     // Every route into the season declares the mode, so a Quick Play session
     // can never leak its five or its (absent) bench into a league fixture.
     this.mode = 'league';
+    // A club is not a season. Without a league there is no next fixture — there
+    // is nothing to play — so the choice that creates one comes first.
+    if (!leagueExists(this.career)) {
+      this.nav('league');
+      return;
+    }
     const fixture = nextFixture(this.career.results);
     if (!fixture) {
       // The season is finished. The league screen is where the next one starts,
@@ -527,12 +580,9 @@ export class Game {
     this.state = 'career';
     clear(this.uiRoot);
     renderCareer(this.uiRoot, {
-      manager: this.profile?.manager ?? 'Guest',
-      club: this.profile?.club ?? 'Your club',
       season: this.career.season,
       current: this.career.results,
       history: this.career.history,
-      lineup: this.selected,
       onBack: () => this.goBack(),
     });
   }
@@ -544,7 +594,6 @@ export class Game {
       halfSeconds: this.career.settings.halfSeconds,
       weather: this.career.settings.weather,
       reducedMotion: this.career.settings.reducedMotion,
-      systemReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       sound: this.career.settings.sound,
       season: this.career.season,
       manager: this.profile?.manager ?? 'Guest',
@@ -597,16 +646,13 @@ export class Game {
   /** Route a main-menu tile to its screen. */
   private openSection(section: MenuSection): void {
     // Every tile on the title screen belongs to the club and the season — the
-    // League, the squad view, the player library, the career and the settings.
-    // Claiming league mode here means a screen that reads `starters()` can
-    // never be left showing the five from a friendly the player played earlier.
+    // League, the player library, the career and the settings. Claiming league
+    // mode here means a screen that reads `starters()` can never be left showing
+    // the five from a friendly the player played earlier.
     this.mode = 'league';
     switch (section) {
       case 'league':
         this.nav('league');
-        break;
-      case 'squad':
-        this.nav('squadview');
         break;
       case 'players':
         this.nav('players');
@@ -776,6 +822,9 @@ export class Game {
       case 'modes':
         this.showModes();
         break;
+      case 'help':
+        this.showHelp();
+        break;
       case 'league':
         this.showLeague();
         break;
@@ -859,6 +908,7 @@ export class Game {
     clear(this.uiRoot);
     const fixtures = playerFixtures();
     renderModes(this.uiRoot, {
+      started: leagueExists(this.career),
       season: this.career.season,
       // Only the player's own fixtures are ever persisted, so a stored result
       // is a game played. This is the same count the League screen shows.
@@ -866,9 +916,24 @@ export class Game {
       total: fixtures.length,
       onQuick: () => this.enterQuickPlay(),
       onLeague: () => this.playNextFixture(),
+      onHelp: () => this.nav('help'),
       onBack: () => this.goBack(),
     });
     this.presentInBand(ROSTER[0], '.modes-spacer', FRAMING.menu, { maxFill: 0.46 });
+  }
+
+  /**
+   * The game guide. The reason every other screen is quiet: the words that used
+   * to be their subtitles are written down once, here, where a player who wants
+   * them can read them at length.
+   */
+  private showHelp(): void {
+    this.state = 'help';
+    clear(this.uiRoot);
+    renderHelp(this.uiRoot, { onBack: () => this.goBack() });
+    // A document, not a stage: no hero is framed into it, and the one behind the
+    // Play screen must not show through the guide.
+    this.renderer.hideShowcase();
   }
 
   /**
@@ -1266,15 +1331,15 @@ export class Game {
   private confirmQuit(): void {
     const w = this.world;
     if (!w) return;
-    const quick = this.mode === 'quick';
     renderPauseConfirm(this.overlay, {
       onConfirm: () => {
-        // Abandon the match: no result is recorded against the fixture. Hand
-        // control back the same way the full-time screen does, so quitting a
-        // friendly does not drop the player into the league hub either.
+        // Abandon the match: no result is recorded against the fixture, and the
+        // season is left exactly where it was. Quit always returns to the title
+        // — the first page — rather than to whichever hub the match came from,
+        // so the one control means the same thing in every mode.
         clear(this.overlay);
         this.hud = null;
-        this.nav(quick ? 'title' : 'league', false);
+        this.nav('title', false);
       },
       onCancel: () => this.enterPauseMenu(),
     });
@@ -1415,7 +1480,7 @@ export class Game {
     // pattern. The choice is queued and the world is unpaused together.
     w.paused = true;
     this.state = 'penalty';
-    renderPenaltyDive(this.overlay, w, (direction: DiveDirection) => {
+    renderPenaltyDive(this.overlay, (direction: DiveDirection) => {
       if (this.state !== 'penalty') return; // one choice per penalty
       queue(w, { type: 'dive', team: 0, value: direction });
       clear(this.overlay);
@@ -1432,7 +1497,7 @@ export class Game {
     // lands before runSetPiece() strikes the ball. The CPU keeper then reads it.
     w.paused = true;
     this.state = 'penalty';
-    renderPenaltyShoot(this.overlay, w, (aim: DiveDirection) => {
+    renderPenaltyShoot(this.overlay, (aim: DiveDirection) => {
       if (this.state !== 'penalty') return; // one choice per penalty
       queue(w, { type: 'shot', team: 0, value: aim });
       clear(this.overlay);

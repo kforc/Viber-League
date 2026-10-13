@@ -180,3 +180,58 @@ the **half-time panel too**. Every isolation check below it was therefore vacuou
 Assert the element that only exists on the screen you mean (`.stats-table`, not
 `.overlay-screen`), and drive a match in two halves, always answering the panel.
 
+**Corollary (2026-10-13): never test a screen through a route that no longer
+exists.** The SQUAD tile was removed from the front page, and the checks that
+verified the squad view clicked that tile. The screen still existed — reachable
+from the result panel's "Squad" shortcut — so the assertions moved there. A
+route that has been deleted cannot fail; it just stops covering anything.
+
+## Front page and the league gate (added 2026-10-13)
+
+- **`leagueStartedAt` gates LEAGUE, and `loadCareer` deliberately does NOT
+  backfill it.** A save written before the field existed has a season in it and
+  no marker, so it lands on the gate with its table, fixtures and injuries
+  intact — which is exactly where LOAD EXISTING LEAGUE appears instead of the
+  progress being wiped. Backfilling would hide the very bug the feature exists
+  to prevent. `career.test.ts` pins it by stripping the field from raw storage.
+- **`leagueExists` vs `hasStoredLeague` are different questions.**
+  `leagueExists` = a league is live (`leagueStartedAt !== null`).
+  `hasStoredLeague` = there is a season worth resuming (results or history
+  non-empty). The gate needs both: the first decides whether to show the gate,
+  the second whether the load button is live and whether NEW LEAGUE must arm.
+- **A dead control beats a missing one.** LOAD EXISTING LEAGUE renders disabled
+  with a `.disabled` class rather than being absent — a button that is missing
+  reads as a feature that was never built; a disabled one reads as honestly not
+  applicable yet. The one thing still said in prose anywhere is why PLAY NEXT
+  MATCH is dead.
+- **State survives the subtitle purge as CHIPS.** "Everything goes" meant the
+  explanatory lines, including the ones carrying state, but the state itself
+  moved into the header's chip furniture: `Season 1 · 0/12` + position on
+  LEAGUE, `Round 2 · Away` on the opponent screen, `Season N` on CAREER. A
+  subtitle explains a screen; a chip is a fact about it.
+- **A screen reached without `nav()` is not on the history stack.** HELP was
+  wired as `() => this.showHelp()` — it set `state` but pushed nothing, so BACK
+  popped the entry *below* the Play screen and dropped the player on the title.
+  Route through `nav()` (and add the `case` to its switch) or BACK skips a level.
+- **Click harness tiles by LABEL, never by index.** Dropping the SQUAD tile
+  shifted every index after it: `click('.menu-opt', 1)` silently opened Players
+  and `click('.menu-opt', 3)` opened Settings. An index-based harness fails by
+  opening the wrong screen, which is the "wrong screen" trap again. Same family:
+  two assertions still checked `'No win on the board yet'` after the copy pass
+  shortened it to `'No win yet.'` — a stale assertion fails for a reason that has
+  nothing to do with the code.
+- **`.help-body` is a scroller** and must stay in `flow-club.mjs`'s `SCROLLERS`,
+  or the clip detector flags the guide as a regression every run.
+- **`.screen-sub` and `.play-sub` are gone from the app** (2026-10-13), with all
+  their CSS. "No explanatory text under action buttons" is a standing rule; the
+  PLAY button's "Choose a mode" sub-label was breaking it.
+
+## Known, pre-existing, NOT fixed
+
+- **The title screen's framed Viber overlaps the club-crest line**, hiding the
+  middle of the club name. Present in the committed HEAD screenshot too (crop
+  both and compare before claiming a regression). The figure is marginally
+  larger now the tagline is gone; the defect is the same one.
+- **The League screen's floating action bar overlaps the last table row.** Also
+  in HEAD. The screen scrolls, so the row is reachable.
+

@@ -21,7 +21,6 @@ import {
 import { WEATHERS, WEATHER_ORDER } from '../sim/weather';
 import { CLUBS, PLAYER_CLUB, deriveShort } from '../sim/content';
 import {
-  LEAGUE_CLUB_IDS,
   PLAYER_CLUB_ID,
   buildTable,
   clubName,
@@ -31,7 +30,6 @@ import {
   opponentOf,
   playerFixtures,
   playerPosition,
-  playerRow,
   recentForm,
   type FormEntry,
   type ResultMap,
@@ -265,16 +263,22 @@ function backButton(onBack: () => void, label = 'Back'): HTMLElement {
   return b;
 }
 
-/** A header row: optional back button, then the title block. */
+/**
+ * A header row: title, optional back button, optional right-hand chip.
+ *
+ * There is deliberately no subtitle. The one-line gloss that used to live here
+ * explained what the screen was for — which the player could usually already
+ * see — and it is written down once in the game guide instead. What sits under a
+ * title now is either nothing, or state the player needs to act on.
+ */
 function screenHead(
   title: string,
-  sub: string,
   onBack?: () => void,
   right?: HTMLElement,
 ): HTMLElement {
   const head = el('div', 'screen-head');
   const titleWrap = el('div', 'head-text');
-  titleWrap.append(el('h1', 'screen-title', title), el('p', 'screen-sub', sub));
+  titleWrap.append(el('h1', 'screen-title', title));
 
   if (onBack) {
     const left = el('div', 'head-left');
@@ -291,12 +295,19 @@ function screenHead(
 /* 1. Main menu                                                        */
 /* ------------------------------------------------------------------ */
 
-/** The five club sections behind the main menu. */
-export type MenuSection = 'league' | 'squad' | 'players' | 'career' | 'settings';
+/**
+ * The club sections behind the main menu.
+ *
+ * Squad is deliberately absent. It was a tile that led to the read-only view of
+ * the five — but that view is already where a match sends you (the result
+ * screen's Squad button), and a front page that offers the same thing twice
+ * makes the player choose between two doors to one room. The squad is named
+ * where it is actually changed: the picker, reached from Play.
+ */
+export type MenuSection = 'league' | 'players' | 'career' | 'settings';
 
 const MENU_OPTIONS: Array<{ id: MenuSection; ico: string; label: string }> = [
   { id: 'league', ico: '🏆', label: 'League' },
-  { id: 'squad', ico: '👥', label: 'Squad' },
   { id: 'players', ico: '⭐', label: 'Players' },
   { id: 'career', ico: '📈', label: 'Career' },
   { id: 'settings', ico: '⚙️', label: 'Settings' },
@@ -332,7 +343,7 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
     el('div', 'logo-line2', 'League'),
   );
 
-  top.append(logo, el('p', 'tagline', 'Pick your five. Read the pitch. Win the match.'));
+  top.append(logo);
 
   // The player's own club, under the wordmark, wearing the crest they chose.
   if (opts?.club) {
@@ -342,11 +353,10 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
   }
 
   const bottom = el('div', 'menu-bottom');
-  const play = el('button', 'primary-btn play-btn');
-  // PLAY opens the mode screen, so it no longer names the next fixture. The
-  // season context lives on the League tile, where it is a choice rather than a
-  // promise about what this button does.
-  play.append(el('span', '', 'Play'), el('span', 'play-sub', 'Choose a mode'));
+  const play = el('button', 'primary-btn play-btn', 'Play');
+  // No sub-label. "Choose a mode" explained a button whose next screen is two
+  // cards reading Quick Play and League — the explanation arrived before the
+  // thing it explained, which is the shape of every subtitle this pass removed.
   on(play, 'click', onStart);
 
   const options = el('div', 'menu-options');
@@ -382,12 +392,16 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
 /* ------------------------------------------------------------------ */
 
 export interface ModesOpts {
+  /** True once a league exists, so the League tile can say so rather than
+   *  advertising a season that has not been created. */
+  started: boolean;
   season: number;
   /** League games the player has completed, and how many the season holds. */
   played: number;
   total: number;
   onQuick: () => void;
   onLeague: () => void;
+  onHelp: () => void;
   onBack: () => void;
 }
 
@@ -397,46 +411,152 @@ export interface ModesOpts {
  * The mode is a lens over one pre-match flow rather than two games, so the
  * cards have to carry the distinction that the screens after them do not: a
  * friendly records nothing and costs nothing, while the league is where the
- * twelve-man squad, the injuries and the table actually bite.
+ * twelve-man squad, the injuries and the table actually bite. That is now a
+ * single uppercase line each — the title and the fact about it — because prose
+ * explaining what a tile does was one of the subtleties moved into the guide.
+ *
+ * HELP lives on this screen rather than the menu. It is the moment a player has
+ * declared how they want to play and not yet learned any of the rules, which is
+ * when a guide is worth reading; buried in Settings it is documentation nobody
+ * meets.
  */
 export function renderModes(root: HTMLElement, opts: ModesOpts): void {
   clear(root);
   const wrap = el('div', 'screen modes-screen');
-  wrap.append(screenHead('Play', 'Two ways in. Pick one.', opts.onBack));
+  wrap.append(screenHead('Play', opts.onBack));
 
   // The empty band the renderer frames a Viber into — the same trick the title
   // screen uses, so the hero lands between the header and the cards.
   wrap.append(el('div', 'modes-spacer'));
 
-  const card = (cls: string, title: string, sub: string, meta: string, onClick: () => void) => {
+  const card = (cls: string, title: string, meta: string, onClick: () => void) => {
     const b = el('button', `mode-card ${cls}`);
-    b.append(
-      el('span', 'mode-title', title),
-      el('span', 'mode-sub', sub),
-      el('span', 'mode-meta', meta),
-    );
+    b.append(el('span', 'mode-title', title), el('span', 'mode-meta', meta));
     on(b, 'click', onClick);
     return b;
   };
 
   const cards = el('div', 'mode-cards');
   cards.append(
-    card('quick', 'Quick Play', 'Pick any five and play', 'Nothing recorded', opts.onQuick),
+    card('quick', 'Quick Play', 'Nothing recorded', opts.onQuick),
     card(
       'league',
       'League',
-      'Your twelve, injuries and bans',
-      `Season ${opts.season} · ${opts.played} of ${opts.total} played`,
+      opts.started
+        ? `Season ${opts.season} · ${opts.played} of ${opts.total} played`
+        : 'Not started',
       opts.onLeague,
     ),
   );
 
-  wrap.append(cards);
+  const help = el('button', 'ghost-btn wide', 'Help');
+  help.type = 'button';
+  on(help, 'click', opts.onHelp);
+
+  const stack = el('div', 'modes-stack');
+  stack.append(cards, help);
+  wrap.append(stack);
   root.append(wrap);
 }
 
 /* ------------------------------------------------------------------ */
-/* 1b. Profile — create a club, or sign back into one                  */
+/* 1b. Game guide — the prose, kept in one place                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The instruction that used to be scattered across the game.
+ *
+ * Every screen carried a line explaining what it was for, and most of it was
+ * something the player could already see — so it read as filler and was skipped
+ * exactly when it was needed. It lives here instead, behind one Help button on
+ * the Play screen, where a player who wants the rules reads them and a player
+ * who doesn't isn't slowed down by them.
+ *
+ * `body` is plain sentences, not markup: this is a document shown in the game's
+ * own type, and it has to survive a phone-width column without a wide layout of
+ * its own.
+ */
+interface HelpTopic {
+  title: string;
+  body: string[];
+}
+
+const HELP_TOPICS: HelpTopic[] = [
+  {
+    title: 'Two ways to play',
+    body: [
+      'Quick Play is a friendly. Pick any five and play them — nothing is recorded: no result, no injuries, no bans.',
+      'League is the season. You name a twelve-man squad, the first five fit players start each match, and what happens carries across the whole league.',
+    ],
+  },
+  {
+    title: 'Naming your side',
+    body: [
+      'Tap a Viber to read their card, then add them. The order you pick is the order they take the pitch.',
+      'An injury or a red card takes a player out for the next match or two. That is why the squad is twelve rather than five — name depth so a knock never leaves you short.',
+      'In a league match you can change three players from the pause menu.',
+    ],
+  },
+  {
+    title: 'On the pitch',
+    body: [
+      'SHOOT strikes the ball, PASS finds a team-mate, and SPECIAL fires a shot from distance once its meter fills.',
+      'The mentality row changes how the five press. Attack pushes up, Defend drops deep, Counter waits for the break.',
+      'PAUSE freezes the match. From there you can substitute, or Quit — quitting records nothing and returns you to the title.',
+    ],
+  },
+  {
+    title: 'Weather and venue',
+    body: [
+      'Rain wets the pitch: the ball runs faster and players slip more.',
+      'Snow is heavier underfoot and slower. Fog hides the far side of the pitch. Clear is the fairest ground.',
+    ],
+  },
+  {
+    title: 'The league',
+    body: [
+      'Seven clubs, twelve matches each. Every club plays on the same matchday, so nobody can get ahead of you.',
+      "The other clubs' results appear once you have played that matchday yourself — the table is never further along than you are.",
+      'Finish all twelve matches and the season is filed into your career history.',
+    ],
+  },
+  {
+    title: 'Penalties',
+    body: [
+      'Taking one: pick your side and watch the keeper. Aiming away from the guess is worth more than aiming well.',
+      'Saving one: read the dive. A correct read can catch a shot that was struck cleanly.',
+    ],
+  },
+  {
+    title: 'Your save',
+    body: [
+      'Everything — the club, the squad, the season and the table — is stored on this device only.',
+    ],
+  },
+];
+
+export interface HelpOpts {
+  onBack: () => void;
+}
+
+export function renderHelp(root: HTMLElement, opts: HelpOpts): void {
+  clear(root);
+  const wrap = el('div', 'screen help-screen');
+  wrap.append(screenHead('Help', opts.onBack));
+
+  const body = el('div', 'help-body');
+  for (const t of HELP_TOPICS) {
+    const sec = el('section', 'help-topic');
+    sec.append(el('h2', 'help-title', t.title));
+    for (const line of t.body) sec.append(el('p', 'help-line', line));
+    body.append(sec);
+  }
+  wrap.append(body);
+  root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 1c. Profile — create a club, or sign back into one                  */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -586,15 +706,7 @@ export function renderOnboarding(
   const card = el('div', 'profile-card');
 
   const head = el('div', 'profile-head');
-  head.append(
-    brand(),
-    el('h1', 'screen-title', 'Create your club'),
-    el(
-      'p',
-      'screen-sub',
-      'Your name, your club and your crest. Set a password so you can get them back.',
-    ),
-  );
+  head.append(brand(), el('h1', 'screen-title', 'Create your club'));
 
   const form = el('form', 'profile-form');
   form.setAttribute('novalidate', '');
@@ -768,12 +880,17 @@ export function renderSignIn(
   const wrap = el('div', 'screen profile-screen signin-screen');
   const card = el('div', 'profile-card');
 
+  /*
+   * No muted line under the greeting.
+   *
+   * It read "Manager Alex · Riverside Rovers" in the dim ink every subtitle
+   * used — but the crest directly below already names the club, so half of it
+   * was a restatement and the other half was the player's own name, which is
+   * on the account chip they pressed to get here. This was the last
+   * `.screen-sub` in the app.
+   */
   const head = el('div', 'profile-head');
-  head.append(
-    brand(),
-    el('h1', 'screen-title', 'Welcome back'),
-    el('p', 'screen-sub', `Manager ${opts.manager} · ${opts.club}`),
-  );
+  head.append(brand(), el('h1', 'screen-title', 'Welcome back'));
 
   const crest = el('div', 'crest-preview big');
   const badge = el('span', 'crest-badge');
@@ -1041,10 +1158,14 @@ function squadStrip(
   const xi = selected.filter((id) => !out[id]).slice(0, starters);
   const bench = selected.filter((id) => !xi.includes(id));
 
-  const group = (label: string, hint: string, cls: string, rows: Array<{ id: string | null; idx: number }>) => {
+  // Labels only. The "on the pitch" / "cover for injuries & bans" asides that
+  // used to sit under each group heading said what the slot count already says,
+  // and the second one was wrong in a friendly. The guide explains what a
+  // reserve is for; the strip just has to show it.
+  const group = (label: string, cls: string, rows: Array<{ id: string | null; idx: number }>) => {
     const box = el('div', `strip-group ${cls}`);
     const head = el('div', 'strip-head');
-    head.append(el('span', 'strip-label', label), el('span', 'strip-hint', hint));
+    head.append(el('span', 'strip-label', label));
     const slots = el('div', 'strip-slots');
     for (const r of rows) slots.append(slot(r.id, r.idx));
     box.append(head, slots);
@@ -1074,7 +1195,7 @@ function squadStrip(
     );
   }
 
-  strip.append(legend, group('Starting five', 'on the pitch', 'start', entries(xi, starters)));
+  strip.append(legend, group('Starting five', 'start', entries(xi, starters)));
 
   /*
    * No reserves, no reserve row.
@@ -1086,7 +1207,7 @@ function squadStrip(
    */
   if (reserveCount > 0) {
     strip.append(
-      group(`${reserveCount} in reserve`, 'cover for injuries & bans', 'bench', entries(bench, reserveCount)),
+      group(`${reserveCount} in reserve`, 'bench', entries(bench, reserveCount)),
     );
   }
   return strip;
@@ -1099,9 +1220,6 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   // ---- header + progress ring ----
   const head = screenHead(
     opts.quick ? 'Choose Your Five' : 'Choose Your Squad',
-    opts.quick
-      ? 'Tap a Viber to inspect their qualities, then add them. These five take the pitch.'
-      : `Tap a Viber to inspect their qualities, then add them. The first five start; you may name up to ${opts.max}.`,
     opts.onBack,
     progressRing(opts.selected.length, opts.max),
   );
@@ -1629,11 +1747,7 @@ export function renderWeather(
 ): void {
   clear(root);
   const wrap = el('div', 'screen squad-screen venue-screen');
-  const head = screenHead(
-    'Choose Your Venue',
-    'Four grounds, four different games. The weather decides the bounce, the grip and the tempo.',
-    opts.onBack,
-  );
+  const head = screenHead('Choose Your Venue', opts.onBack);
 
   // ---- the featured stadium ----
   const stage = el('div', 'venue-stage');
@@ -1717,12 +1831,13 @@ export function renderMinutes(
 ): void {
   clear(root);
   const wrap = el('div', 'screen squad-screen');
-  const head = screenHead('Match Length', 'How long is the match?', opts.onBack);
+  // The options name themselves; the heading is the question.
+  const head = screenHead('Match Length', opts.onBack);
 
   const row = el('div', 'choice-row length-row');
   for (const o of LENGTH_OPTIONS) {
     const b = el('button', `choice-btn${opts.value === o.halfSeconds ? ' active' : ''}`);
-    b.append(el('span', 'choice-label', o.label), el('span', 'choice-hint', o.sub));
+    b.append(el('span', 'choice-label', o.label));
     on(b, 'click', () => opts.onPick(o.halfSeconds));
     row.append(b);
   }
@@ -1756,13 +1871,12 @@ export function renderOpponent(
   clear(root);
   const wrap = el('div', 'screen squad-screen');
   const f = opts.fixture;
-  const head = screenHead(
-    'Your Opponent',
-    f
-      ? `Season ${f.season} · Round ${f.round} · ${f.home ? 'at home' : 'away'}`
-      : 'Matched to your squad rating — an even fight.',
-    opts.onBack,
-  );
+  // Which fixture this is, as a chip. It is state the manager needs — home or
+  // away, and how deep into the season — so it survives the subtitle purge in the
+  // header furniture rather than under the title.
+  const chips = el('div', 'head-chips');
+  if (f) chips.append(el('span', 'fixture-meta', `Round ${f.round} · ${f.home ? 'Home' : 'Away'}`));
+  const head = screenHead('Your Opponent', opts.onBack, chips);
 
   const vs = el('div', 'vs-row');
 
@@ -1822,18 +1936,19 @@ export function renderHalftime(
   score.textContent = `${world.teams[0].short}  ${world.teams[0].score} - ${world.teams[1].score}  ${world.teams[1].short}`;
   panel.append(score);
 
-  panel.append(el('p', 'panel-sub', 'How do you want to play the second half?'));
-
   const row = el('div', 'choice-row');
-  const choices: Array<{ id: Mentality; label: string; hint: string }> = [
-    { id: 'attack', label: 'Attack', hint: 'Push for a winner' },
-    { id: 'balanced', label: 'Balanced', hint: 'Stay in control' },
-    { id: 'defend', label: 'Defend', hint: 'Protect the score' },
-    { id: 'counter', label: 'Counter', hint: 'Hit them on the break' },
+  // Four mentalities, named. What each one does is in the guide — under a
+  // half-time scoreline there is no room to read a paragraph, and the harness
+  // has to click these.
+  const choices: Array<{ id: Mentality; label: string }> = [
+    { id: 'attack', label: 'Attack' },
+    { id: 'balanced', label: 'Balanced' },
+    { id: 'defend', label: 'Defend' },
+    { id: 'counter', label: 'Counter' },
   ];
   for (const c of choices) {
     const b = el('button', 'choice-btn');
-    b.append(el('span', 'choice-label', c.label), el('span', 'choice-hint', c.hint));
+    b.append(el('span', 'choice-label', c.label));
     on(b, 'click', () => onContinue(c.id));
     row.append(b);
   }
@@ -1852,30 +1967,27 @@ export function renderHalftime(
  */
 export function renderPenaltyDive(
   root: HTMLElement,
-  world: World,
   onDive: (direction: DiveDirection) => void,
 ): void {
   clear(root);
   const wrap = el('div', 'screen overlay-screen penalty-screen');
   const panel = el('div', 'panel penalty-panel');
   panel.append(el('h2', 'panel-title', 'Defend the Penalty'));
-  panel.append(el('p', 'panel-sub',
-    `${world.teams[1].name} are stepping up. Pick a direction for your keeper before the kick.`));
 
   const row = el('div', 'choice-row dive-row');
-  const choices: Array<{ id: DiveDirection; label: string; hint: string }> = [
-    { id: 'left', label: '← Left', hint: 'Cover the left corner' },
-    { id: 'centre', label: '↓ Centre', hint: 'Hold your ground' },
-    { id: 'right', label: 'Right →', hint: 'Cover the right corner' },
+  const choices: Array<{ id: DiveDirection; label: string }> = [
+    { id: 'left', label: '← Left' },
+    { id: 'centre', label: '↓ Centre' },
+    { id: 'right', label: 'Right →' },
   ];
   for (const c of choices) {
     const b = el('button', 'choice-btn dive-btn');
     b.type = 'button';
-    b.append(el('span', 'choice-label', c.label), el('span', 'choice-hint', c.hint));
+    b.append(el('span', 'choice-label', c.label));
     on(b, 'click', () => onDive(c.id));
     row.append(b);
   }
-  panel.append(row, el('p', 'penalty-hint', 'Watch the keeper dive — a correct read can catch the shot.'));
+  panel.append(row);
   wrap.append(panel);
   root.append(wrap);
 }
@@ -1883,31 +1995,27 @@ export function renderPenaltyDive(
 /** The human takes a penalty: pick the placement before the kick. */
 export function renderPenaltyShoot(
   root: HTMLElement,
-  world: World,
   onShoot: (direction: DiveDirection) => void,
 ): void {
   clear(root);
   const wrap = el('div', 'screen overlay-screen penalty-screen');
   const panel = el('div', 'panel penalty-panel');
   panel.append(el('h2', 'panel-title', 'Take the Penalty'));
-  panel.append(el('p', 'panel-sub',
-    `${world.teams[0].name} step up. Pick where to place it — the keeper will guess.`));
 
   const row = el('div', 'choice-row dive-row');
-  const choices: Array<{ id: DiveDirection; label: string; hint: string }> = [
-    { id: 'left', label: '↖ Left', hint: 'Low-left corner' },
-    { id: 'centre', label: '↑ Centre', hint: 'Down the middle' },
-    { id: 'right', label: 'Right ↗', hint: 'Low-right corner' },
+  const choices: Array<{ id: DiveDirection; label: string }> = [
+    { id: 'left', label: '↖ Left' },
+    { id: 'centre', label: '↑ Centre' },
+    { id: 'right', label: 'Right ↗' },
   ];
   for (const c of choices) {
     const b = el('button', 'choice-btn dive-btn');
     b.type = 'button';
-    b.append(el('span', 'choice-label', c.label), el('span', 'choice-hint', c.hint));
+    b.append(el('span', 'choice-label', c.label));
     on(b, 'click', () => onShoot(c.id));
     row.append(b);
   }
-  panel.append(row, el('p', 'penalty-hint',
-    'A corner beats a keeper who guesses wrong — but a centre is hardest for them to reach.'));
+  panel.append(row);
   wrap.append(panel);
   root.append(wrap);
 }
@@ -1925,7 +2033,6 @@ export function renderPause(
   const wrap = el('div', 'screen overlay-screen pause-screen');
   const panel = el('div', 'panel pause-panel');
   panel.append(el('h2', 'panel-title', 'Paused'));
-  panel.append(el('p', 'panel-sub', 'The match is frozen.'));
   const row = el('div', 'menu-btn-row');
   const resume = el('button', 'menu-btn primary', 'Resume');
   resume.type = 'button';
@@ -1940,7 +2047,7 @@ export function renderPause(
   subs.type = 'button';
   subs.disabled = opts.subsLeft <= 0;
   on(subs, 'click', opts.onSubs);
-  const quit = el('button', 'menu-btn danger', 'Quit to League');
+  const quit = el('button', 'menu-btn danger', 'Quit');
   quit.type = 'button';
   on(quit, 'click', opts.onQuit);
   row.append(resume, subs, quit);
@@ -1958,7 +2065,6 @@ export function renderPauseConfirm(
   const wrap = el('div', 'screen overlay-screen pause-screen');
   const panel = el('div', 'panel pause-panel');
   panel.append(el('h2', 'panel-title', 'Quit match?'));
-  panel.append(el('p', 'panel-sub', 'The result will not be recorded. You return to the league.'));
   const row = el('div', 'menu-btn-row');
   const yes = el('button', 'menu-btn danger', 'Quit without saving');
   yes.type = 'button';
@@ -2057,14 +2163,12 @@ export function renderSubs(
     const offPitch = world.players.filter((p) => p.team === 0 && p.off);
     const bench = world.bench[0];
     const total = world.subsMade[0] + bench.length;
+    // The count is state the manager needs before choosing. How to make the swap
+    // is in the guide, and the two columns on either side of it demonstrate it.
     panel.append(
-      el(
-        'p',
-        'panel-sub',
-        bench.length
-          ? `${world.subsMade[0]} of ${total} used. Pick a player to take off, then their replacement.`
-          : 'No substitutes left.',
-      ),
+      bench.length
+        ? el('p', 'subs-count', `${world.subsMade[0]} of ${total} used`)
+        : el('p', 'subs-count', 'No substitutes left'),
     );
 
     // Who is missing, and why. Without this the "On the pitch" column would
@@ -2220,12 +2324,17 @@ export function renderResult(
 }
 
 /* ================================================================== */
-/* The club sections — LEAGUE / SQUAD / PLAYERS / CAREER / SETTINGS    */
+/* The club sections — LEAGUE / PLAYERS / CAREER / SETTINGS            */
 /* ================================================================== */
-/* These are the five tiles on the main menu. Each one is a real screen
-   reading real state: the league table is built from results, the squad is
-   the five that will actually take the pitch, and the career is the record
-   those matches leave behind. */
+/* These are the four tiles on the main menu. Each one is a real screen
+   reading real state: the league is the season and its table, the players
+   grid is the whole roster, and the career is the record those matches
+   leave behind.
+
+   There used to be a fifth, SQUAD, showing the five that will take the
+   pitch. It was a second view of what the picker already shows, one tap
+   from the front page, competing with LEAGUE for the same job. The screen
+   itself survives as the result panel's shortcut; the tile does not. */
 
 /* ---- shared furniture ---- */
 
@@ -2247,10 +2356,9 @@ function clubCrest(clubId: string, size: 'sm' | 'md' = 'sm'): HTMLElement {
   return b;
 }
 
-function statCell(label: string, value: string | number, hint?: string): HTMLElement {
+function statCell(label: string, value: string | number): HTMLElement {
   const c = el('div', 'stat-cell');
   c.append(el('div', 'stat-num', String(value)), el('div', 'stat-label', label));
-  if (hint) c.append(el('div', 'stat-hint', hint));
   return c;
 }
 
@@ -2279,11 +2387,9 @@ function settingsGroup(title: string, rows: HTMLElement[]): HTMLElement {
 }
 
 /** One settings row: a label on the left, a control on the right. */
-function settingRow(label: string, help: string, control: HTMLElement): HTMLElement {
+function settingRow(label: string, control: HTMLElement): HTMLElement {
   const row = el('div', 'setting-row');
-  const text = el('div', 'setting-text');
-  text.append(el('div', 'setting-label', label), el('div', 'setting-help', help));
-  row.append(text, control);
+  row.append(el('div', 'setting-label', label), control);
   return row;
 }
 
@@ -2335,17 +2441,24 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
   const wrap = el('div', 'screen squad-screen league-screen');
   const table = buildTable(opts.results);
   const position = playerPosition(table);
-  const row = playerRow(table);
   const fixtures = playerFixtures();
   const played = fixtures.filter((f) => opts.results[f.id]).length;
   const done = played === fixtures.length;
 
-  const head = screenHead(
-    'League',
-    `Season ${opts.season} · ${LEAGUE_CLUB_IDS.length} clubs · ${played} of ${fixtures.length} played`,
-    opts.onBack,
+  /*
+   * Season and progress as chips, not a subtitle.
+   *
+   * The line that used to sit under the title carried real state — how far
+   * through the season you are — so it is moved into the same chip language as
+   * the league position rather than dropped. State a player needs belongs in the
+   * header's furniture; prose explaining the screen does not.
+   */
+  const chips = el('div', 'head-chips');
+  chips.append(
     el('span', 'league-pos', position ? `${ordinal(position)}` : '—'),
+    el('span', 'league-meta', `Season ${opts.season} · ${played}/${fixtures.length}`),
   );
+  const head = screenHead('League', opts.onBack, chips);
 
   const tabs = el('div', 'chip-row');
   for (const t of ['table', 'fixtures'] as LeagueTab[]) {
@@ -2356,20 +2469,23 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
 
   const body = opts.tab === 'table' ? leagueTable(table) : leagueFixtures(fixtures, opts.results);
 
-  // What the player's five are actually worth, and what that buys them.
-  const ovr = teamOverall(opts.lineup);
+  /*
+   * The one line under the table, and only when there is something to say.
+   *
+   * It used to narrate the season — "your five rate OVR 82, 1 played, 3 points,
+   * +2 goal difference" — which is the table and the OVR chip read aloud. What
+   * is left is the one thing the screen cannot otherwise say: why PLAY NEXT
+   * MATCH is dead. A disabled control with no reason is a usability bug, not a
+   * subtlety, so this survives the purge.
+   */
   const short = 5 - opts.lineup.length;
-  const note = el('p', 'section-note');
-  if (short > 0) {
-    // The one thing that actually blocks a match. Saying so here is the
-    // difference between a dead button and an instruction — and with injuries
-    // in play it is a state the player will meet, not a hypothetical.
-    note.textContent = `Only ${opts.lineup.length} fit for the next match — a side needs five. Add players, or wait for the injured to recover.`;
-  } else {
-    note.textContent = row
-      ? `Your five rate OVR ${ovr}. ${row.played} played, ${row.points} point${row.points === 1 ? '' : 's'}, ${row.gd >= 0 ? '+' : ''}${row.gd} goal difference.`
-      : `Your five rate OVR ${ovr}. Pick a squad to get started.`;
-  }
+  const note = short > 0
+    ? el(
+        'p',
+        'section-note',
+        `Only ${opts.lineup.length} fit for the next match — a side needs five. Add players, or wait for the injured to recover.`,
+      )
+    : null;
 
   /*
    * The treatment room, named, and placed ABOVE the table.
@@ -2402,10 +2518,11 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
       rows.append(r);
     }
     box.append(rows);
-    wrap.append(head, tabs, box, body, note);
+    wrap.append(head, tabs, box, body);
   } else {
-    wrap.append(head, tabs, body, note);
+    wrap.append(head, tabs, body);
   }
+  if (note) wrap.append(note);
 
   const actions = el('div', 'flow-actions');
   if (done) {
@@ -2443,6 +2560,80 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
     opts.onNewLeague();
   });
   actions.append(newLeague);
+
+  wrap.append(actions);
+  root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 6b. The league gate — a club is not a season                         */
+/* ------------------------------------------------------------------ */
+
+export interface LeagueGateOpts {
+  /** The device holds a league that can be resumed. */
+  canLoad: boolean;
+  /** Starting a new one here would overwrite a season already stored. */
+  hasStored: boolean;
+  onNewLeague: () => void;
+  onLoadExisting: () => void;
+  onBack: () => void;
+}
+
+/**
+ * What the League section looks like before a league exists.
+ *
+ * A club is not a season, and until this screen is answered the table is a lie:
+ * seven clubs on zero, as though a competition had been played and nobody had
+ * turned up. So there is no table here — only the choice to start one, or to
+ * carry on with the one already on the device.
+ *
+ * New League reads differently depending on what it costs. With nothing stored
+ * it is the happy path and wears the primary lime; with a season already on the
+ * device it just wiped, and it wears the danger red the rest of the game uses
+ * for that, and demands a second tap. The same control, the truth about it.
+ */
+export function renderLeagueGate(root: HTMLElement, opts: LeagueGateOpts): void {
+  clear(root);
+  const wrap = el('div', 'screen league-screen league-gate');
+  wrap.append(screenHead('League', opts.onBack));
+
+  // The same empty band the title and mode screens frame a Viber into, so this
+  // is not a bare column of buttons on an empty page.
+  wrap.append(el('div', 'modes-spacer'));
+
+  const actions = el('div', 'flow-actions gate-actions');
+
+  const fresh = el(
+    'button',
+    opts.hasStored ? 'ghost-btn danger wide' : 'primary-btn wide',
+    'New League',
+  );
+  fresh.type = 'button';
+  let armed = false;
+  on(fresh, 'click', () => {
+    // Two taps, but only when there is something to lose. Confirming over an
+    // empty club would be theatre.
+    if (!armed && opts.hasStored) {
+      armed = true;
+      fresh.textContent = 'New League — overwrites the league on this device, tap again';
+      fresh.classList.add('armed');
+      return;
+    }
+    opts.onNewLeague();
+  });
+  actions.append(fresh);
+
+  const load = el('button', 'ghost-btn wide', 'Load Existing League');
+  load.type = 'button';
+  if (opts.canLoad) {
+    on(load, 'click', opts.onLoadExisting);
+  } else {
+    // Nothing to resume. Say so rather than offering a button that does
+    // nothing — a dead control cannot be distinguished from a broken one.
+    load.disabled = true;
+    load.classList.add('disabled');
+  }
+  actions.append(load);
 
   wrap.append(actions);
   root.append(wrap);
@@ -2567,12 +2758,7 @@ export function renderSquadView(root: HTMLElement, opts: SquadViewOpts): void {
   const wrap = el('div', 'screen squad-screen squad-view');
 
   const ovr = teamOverall(opts.lineup);
-  const head = screenHead(
-    'Squad',
-    'The five that take the pitch. Change them here and every match uses them.',
-    opts.onBack,
-    el('span', 'ovr-chip', `OVR ${ovr}`),
-  );
+  const head = screenHead('Squad', opts.onBack, el('span', 'ovr-chip', `OVR ${ovr}`));
 
   const pitch = el('div', 'squad-pitch');
   PITCH_SLOTS.forEach((slot, i) => {
@@ -2616,11 +2802,12 @@ export function renderSquadView(root: HTMLElement, opts: SquadViewOpts): void {
     balance.append(pill);
   }
   const slotsFilled = opts.lineup.length;
-  const warn = el('p', 'section-note');
-  warn.textContent =
-    slotsFilled === 5
-      ? `${PLAYER_CLUB.name} · Diamond formation · average rating ${ovr}.`
-      : `${slotsFilled} of 5 places filled — matches need a full five.`;
+  // Only when the side is short. The line that used to sit here when it was full
+  // — club, formation, average rating — restated the header's OVR chip and the
+  // balance pills directly above it.
+  const warn = slotsFilled === 5
+    ? null
+    : el('p', 'section-note', `${slotsFilled} of 5 places filled — matches need a full five.`);
 
   /*
    * The rest of the squad, and the treatment room.
@@ -2689,7 +2876,11 @@ export function renderSquadView(root: HTMLElement, opts: SquadViewOpts): void {
   on(change, 'click', opts.onChange);
   actions.append(change);
 
-  wrap.append(head, pitch, balance, warn, ...extras, actions);
+  wrap.append(head, pitch, balance);
+  // `append` stringifies null, so an absent warning must be skipped rather than
+  // passed through.
+  if (warn) wrap.append(warn);
+  wrap.append(...extras, actions);
   root.append(wrap);
 }
 
@@ -2719,12 +2910,9 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
   clear(root);
   const wrap = el('div', 'screen squad-screen hero-select players-screen');
 
-  const head = screenHead(
-    'Players',
-    `All ${ROSTER.length} Vibers. Tap one to read their card, or add them to your squad.`,
-    opts.onBack,
-    progressRing(opts.lineup.length, opts.max),
-  );
+  // The ring already says how many of the squad are named, so there is nothing
+  // under the title but the title.
+  const head = screenHead('Players', opts.onBack, progressRing(opts.lineup.length, opts.max));
 
   const chips = el('div', 'chip-row');
   for (const f of FILTERS) {
@@ -2794,13 +2982,10 @@ const ROLE_SORT: Record<ViberRole, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
 /* ------------------------------------------------------------------ */
 
 export interface CareerOpts {
-  manager: string;
-  club: string;
   season: number;
   /** The season in progress. Completed seasons live in `history`. */
   current: ResultMap;
   history: SeasonSummary[];
-  lineup: string[];
   onBack: () => void;
 }
 
@@ -2810,11 +2995,11 @@ export function renderCareer(root: HTMLElement, opts: CareerOpts): void {
 
   const totals = lifetimeTotals(opts.history, opts.current);
   const form = recentForm(opts.current, 5);
-  const head = screenHead(
-    'Career',
-    `${opts.manager} · ${opts.club} · Season ${opts.season}`,
-    opts.onBack,
-  );
+  // Manager and club are on the title screen and in the account, so repeating
+  // them under a heading was filler. The season number is not repeated anywhere
+  // else on this screen — the history rows are past seasons — so it survives as
+  // a chip.
+  const head = screenHead('Career', opts.onBack, el('span', 'league-meta', `Season ${opts.season}`));
 
   const grid = el('div', 'stat-grid');
   grid.append(
@@ -2829,17 +3014,10 @@ export function renderCareer(root: HTMLElement, opts: CareerOpts): void {
   );
 
   const formPanel = el('section', 'panel career-panel');
-  formPanel.append(
-    el('h2', 'panel-title', 'Current Form'),
-    formPills(form),
-    el(
-      'p',
-      'panel-sub',
-      form.length
-        ? 'Your last five results this season, oldest first.'
-        : 'Play a league match and your form appears here.',
-    ),
-  );
+  formPanel.append(el('h2', 'panel-title', 'Current Form'), formPills(form));
+  // An empty panel needs a reason or it reads as broken. A full one does not need
+  // to be introduced — five pills in a row say what they are.
+  if (!form.length) formPanel.append(el('p', 'panel-sub', 'No matches played yet.'));
 
   const bestPanel = el('section', 'panel career-panel');
   bestPanel.append(el('h2', 'panel-title', 'Best Result'));
@@ -2849,15 +3027,13 @@ export function renderCareer(root: HTMLElement, opts: CareerOpts): void {
       el('p', 'panel-sub', `against ${clubName(totals.best.opponentId)}`),
     );
   } else {
-    bestPanel.append(el('p', 'panel-sub', 'No win on the board yet.'));
+    bestPanel.append(el('p', 'panel-sub', 'No win yet.'));
   }
 
   const historyPanel = el('section', 'panel career-panel');
   historyPanel.append(el('h2', 'panel-title', 'Season History'));
   if (!opts.history.length) {
-    historyPanel.append(
-      el('p', 'panel-sub', 'No completed seasons yet. Finish all 12 league matches to file one.'),
-    );
+    historyPanel.append(el('p', 'panel-sub', 'No completed seasons yet.'));
   } else {
     const list = el('div', 'history-list');
     for (const s of opts.history) {
@@ -2874,10 +3050,7 @@ export function renderCareer(root: HTMLElement, opts: CareerOpts): void {
     historyPanel.append(list);
   }
 
-  const squad = el('p', 'section-note');
-  squad.textContent = `Squad rating OVR ${teamOverall(opts.lineup)} · ${opts.history.length} season${opts.history.length === 1 ? '' : 's'} completed.`;
-
-  wrap.append(head, grid, formPanel, bestPanel, historyPanel, squad);
+  wrap.append(head, grid, formPanel, bestPanel, historyPanel);
   root.append(wrap);
 }
 
@@ -2889,8 +3062,6 @@ export interface SettingsOpts {
   halfSeconds: number;
   weather: WeatherKind | 'random';
   reducedMotion: boolean;
-  /** Reduced motion is also being asked for by the operating system. */
-  systemReducedMotion: boolean;
   sound: boolean;
   season: number;
   manager: string;
@@ -2907,12 +3078,11 @@ export interface SettingsOpts {
 export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
   clear(root);
   const wrap = el('div', 'screen squad-screen settings-screen');
-  const head = screenHead('Settings', 'Saved on this device, alongside your club.', opts.onBack);
+  const head = screenHead('Settings', opts.onBack);
 
   const match = settingsGroup('Match', [
     settingRow(
       'Match length',
-      'How long each half runs. Shorter matches suit quick sessions.',
       segment(
         LENGTH_OPTIONS.map((o) => ({ value: o.halfSeconds, label: o.label })),
         opts.halfSeconds,
@@ -2921,7 +3091,6 @@ export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
     ),
     settingRow(
       'Pitch conditions',
-      'Leave it on Random and every fixture gets its own weather.',
       segment<WeatherKind | 'random'>(
         [
           ...WEATHER_ORDER.map((k) => ({ value: k as WeatherKind | 'random', label: WEATHERS[k].name })),
@@ -2936,9 +3105,6 @@ export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
   const access = settingsGroup('Accessibility', [
     settingRow(
       'Reduced motion',
-      opts.systemReducedMotion
-        ? 'Your device already asks for this, so animations are already off.'
-        : 'Stops the menus drifting and the cards flying in.',
       segment(
         [
           { value: 'off', label: 'Off' },
@@ -2953,7 +3119,6 @@ export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
   const audio = settingsGroup('Sound', [
     settingRow(
       'Crowd & whistle',
-      'The referee, the roar when you score and the noise of the ground.',
       segment(
         [
           { value: 'off', label: 'Off' },
@@ -2983,16 +3148,10 @@ export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
   });
 
   const data = settingsGroup('Your Data', [
-    settingRow(
-      'Squad',
-      'Forgets your five. The league and your record are untouched.',
-      resetSquad,
-    ),
-    settingRow(
-      'Career',
-      `Erases every result and starts Season 1 again. ${opts.manager} and ${opts.club} stay.`,
-      resetCareer,
-    ),
+    // What each button does is on the button. The descriptions that used to sit
+    // here explained a two-tap confirm to someone who had not tapped yet.
+    settingRow('Squad', resetSquad),
+    settingRow('Career', resetCareer),
   ]);
 
   const info = el('div', 'settings-info');

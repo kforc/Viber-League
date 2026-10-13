@@ -9,6 +9,13 @@
    "spill": 0
   },
   {
+   "name": "02-league-gate",
+   "screen": "screen.league-screen.league-gate",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
    "name": "02-league-table",
    "screen": "screen.squad-screen.league-screen",
    "clipped": 0,
@@ -30,11 +37,11 @@
    "spill": 0
   },
   {
-   "name": "04-squad-empty",
-   "screen": "screen.squad-screen.squad-view",
+   "name": "04-help",
+   "screen": "screen.help-screen",
    "clipped": 0,
-   "scrolls": 0,
-   "spill": 0
+   "scrolls": 1,
+   "spill": 3
   },
   {
    "name": "05-players-all",
@@ -69,21 +76,21 @@
    "screen": "screen.squad-screen.settings-screen",
    "clipped": 0,
    "scrolls": 1,
-   "spill": 8
+   "spill": 5
   },
   {
    "name": "10-settings-armed",
    "screen": "screen.squad-screen.settings-screen",
    "clipped": 0,
    "scrolls": 1,
-   "spill": 8
+   "spill": 5
   },
   {
    "name": "10b-settings-sound",
    "screen": "screen.squad-screen.settings-screen",
    "clipped": 0,
    "scrolls": 1,
-   "spill": 8
+   "spill": 5
   },
   {
    "name": "11-squad-picked",
@@ -132,6 +139,13 @@
    "screen": "screen.overlay-screen",
    "clipped": 0,
    "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "17b-squad-view",
+   "screen": "screen.squad-screen.squad-view",
+   "clipped": 0,
+   "scrolls": 1,
    "spill": 0
   },
   {
@@ -213,7 +227,7 @@
   },
   {
    "name": "22-muted-match",
-   "screen": "screen.overlay-screen",
+   "screen": "(none)",
    "clipped": 0,
    "scrolls": 0,
    "spill": 0

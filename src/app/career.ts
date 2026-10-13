@@ -84,6 +84,20 @@ export interface CareerState {
   settings: CareerSettings;
   /** Completed seasons, most recent first. */
   history: SeasonSummary[];
+  /**
+   * When the current league was created, or null when there isn't one yet.
+   *
+   * The league is opt-in: a club is not a season. Until this is set the League
+   * screen offers NEW LEAGUE and LOAD EXISTING LEAGUE rather than a table of
+   * seven clubs that nobody has actually kicked off in.
+   *
+   * Deliberately NOT migrated. A save written before this field exists holds a
+   * season the manager was already part way through, and the whole point of the
+   * gate is that such a player is offered LOAD EXISTING LEAGUE instead of being
+   * forced down the path that wipes it. So an old save loads as "no league
+   * created" and is recovered by that button.
+   */
+  leagueStartedAt: string | null;
   createdAt: string;
 }
 
@@ -111,6 +125,7 @@ export function defaultCareer(seed?: number): CareerState {
     absences: {},
     settings: { ...DEFAULT_SETTINGS },
     history: [],
+    leagueStartedAt: null,
     createdAt: new Date().toISOString(),
   };
 }
@@ -255,6 +270,10 @@ export function loadCareer(): CareerState | null {
       absences: sanitiseAbsences(c.absences),
       settings: sanitiseSettings(c.settings),
       history: sanitiseHistory(c.history),
+      // See `leagueStartedAt` on the interface: an unmigrated save is one with a
+      // season already in it, and it must reach LOAD EXISTING LEAGUE rather than
+      // being silently adopted.
+      leagueStartedAt: typeof c.leagueStartedAt === 'string' ? c.leagueStartedAt : null,
       createdAt: typeof c.createdAt === 'string' ? c.createdAt : new Date().toISOString(),
     };
   } catch {
@@ -387,6 +406,9 @@ export function absencesFromEvents(
  * Opt into a new league: the table, the fixtures and the injury list all start
  * from nothing, while the club and the squad the manager has built stay. A
  * brand-new *club* is a different action (Settings → Erase career).
+ *
+ * Creating a league is what makes the League screen exist at all — this is the
+ * field that turns "a club with no season" into "a season in progress".
  */
 export function newLeague(career: CareerState, seed?: number): CareerState {
   return {
@@ -396,7 +418,37 @@ export function newLeague(career: CareerState, seed?: number): CareerState {
     results: {},
     absences: {},
     history: [],
+    leagueStartedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Continue the league already stored on this device.
+ *
+ * Used by the League gate's LOAD EXISTING LEAGUE. It changes nothing about the
+ * season — the results, the table and the injury list are exactly what the
+ * manager left behind — it only records that a league is live now. This is the
+ * no-lost-progress path: a save from before the gate existed, or a season the
+ * player stepped away from, comes back as it stood rather than being reset.
+ */
+export function loadExistingLeague(career: CareerState): CareerState {
+  return { ...career, leagueStartedAt: new Date().toISOString() };
+}
+
+/** True once a league has been created, not merely a club. */
+export function leagueExists(career: CareerState): boolean {
+  return career.leagueStartedAt !== null;
+}
+
+/**
+ * True when the device holds a league worth loading.
+ *
+ * The career on disk is the only copy — nothing is archived — so what can be
+ * loaded is whatever is still standing in it. An empty club has nothing to
+ * resume, which is why the gate can tell the two cases apart.
+ */
+export function hasStoredLeague(career: CareerState): boolean {
+  return Object.keys(career.results).length > 0 || career.history.length > 0;
 }
 
 export function withSettings(career: CareerState, patch: Partial<CareerSettings>): CareerState {

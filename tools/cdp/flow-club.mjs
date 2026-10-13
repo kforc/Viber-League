@@ -1,8 +1,13 @@
-// Dev-only: drive the five club sections and the league loop over CDP.
+// Dev-only: drive the club sections and the league loop over CDP.
 //
-//   menu -> League (table + fixtures) -> Squad -> Players -> Career -> Settings
-//   -> League -> Play Next Match -> squad -> venue -> minutes -> opponent
-//   -> kick off -> half-time -> full time -> result -> back to the League
+//   menu -> League (gate -> table + fixtures) -> Players -> Career -> Settings
+//   -> Play -> Help -> League -> Play Next Match -> squad -> venue -> minutes
+//   -> opponent -> kick off -> half-time -> full time -> result -> squad view
+//   -> back to the League
+//
+// Tiles are clicked by LABEL, never by index: dropping the SQUAD tile shifted
+// every index after it, and an index-based harness fails by quietly opening the
+// wrong screen.
 //
 // Writes <outDir>/<NN>-<name>.png plus report.json holding page errors,
 // per-screen clipping/spill numbers, and the computed paint of the new
@@ -128,6 +133,9 @@ const SCROLLERS = [
   '.viber-grid', '.fixture-list', '.league-table', '.hero-body',
   '.screen', '.settings-screen', '.career-screen', '.squad-view',
   '.card-shine', '.account-sheet', '.profile-card',
+  // The game guide is a document: it is meant to run past the fold and be read
+  // by scrolling, and its own body is the scroller rather than the screen.
+  '.help-body',
   // The filter / tab chips are an `overflow-x: auto` rail; in portrait the five
   // role chips just exceed the row and are meant to be swiped.
   '.chip-row',
@@ -304,11 +312,33 @@ await freeze();
 // ------------------------------------------------------------- 1. menu tiles
 check('the run starts at the menu', await exists('.menu-screen'));
 const tiles = await count('.menu-opt');
-check('the menu has five section tiles', tiles === 5, 'tiles=' + tiles);
+check('the menu has four section tiles', tiles === 4, 'tiles=' + tiles);
+/*
+ * SQUAD lost its tile.
+ *
+ * It was a second way to see the same five the picker already shows, and it sat
+ * one tap from the front page competing with LEAGUE for the same job. The
+ * screen itself survives — the result panel still offers it as a shortcut —
+ * but the tile does not, so assert by LABEL rather than by count: a count
+ * would pass just as happily on a menu that had quietly swapped SQUAD for
+ * something else.
+ */
+const tileLabels = await evalJs(
+  `[...document.querySelectorAll('.menu-opt')].map((b) => b.textContent.trim())`);
+check('the SQUAD tile is gone from the front page',
+  Array.isArray(tileLabels) && !tileLabels.some((t) => /squad/i.test(t)), JSON.stringify(tileLabels));
+check('the Players tile is still there',
+  Array.isArray(tileLabels) && tileLabels.some((t) => /players/i.test(t)), JSON.stringify(tileLabels));
 const deadTiles = await evalJs(
   `[...document.querySelectorAll('.menu-opt')].filter((b) => b.disabled).length`);
 check('no tile is disabled any more', deadTiles === 0, 'disabled=' + deadTiles);
 check('the "soon" badges are gone', !(await exists('.soon-tag')));
+// The tagline under the wordmark went with the rest of the explanatory prose.
+check('the title screen carries no tagline', !(await exists('.tagline')));
+// And so did the sub-label under PLAY. "Choose a mode" explained a button whose
+// very next screen is two cards reading Quick Play and League.
+check('the PLAY button carries no explanatory sub-label',
+  !(await exists('.play-btn .play-sub')));
 check('the title screen shows the brand mark', await exists('.logo-mark svg'));
 // The seeded profile has no `icon` key, which is exactly what a club saved by an
 // earlier build looks like — so this also covers the migration.
@@ -316,12 +346,63 @@ check('the title screen wears the player\'s own club, not a placeholder',
   (await text('.club-crest')) === 'Riverside Rovers', 'crest=' + (await text('.club-crest')));
 check('a club with no stored crest falls back to the house mark',
   (await evalJs(`document.querySelector('.club-crest svg')?.getAttribute('aria-label')`)) === 'Viber');
+// Measured here, while the tiles are still on screen — see the note where this
+// used to live, one screen later.
+console.log('tile paint:', JSON.stringify(await css('.menu-opt',
+  ['backgroundColor', 'color', 'borderTopWidth', 'borderTopLeftRadius'])));
 await shot('01-menu');
 
-// ------------------------------------------------------------- 2. league
-await click('.menu-opt', 0);
+// ------------------------------------------------------------- 2. the gate
+/*
+ * LEAGUE opens on a gate, not a table.
+ *
+ * A club is not a season. Before this screen existed, LEAGUE showed seven clubs
+ * on zero points, which reads as a competition that has been played and nobody
+ * turned up — a table that is a lie until the player has answered whether they
+ * are starting one. So the first thing LEAGUE shows is the choice.
+ *
+ * The career is wiped in the seeding above, so this is the fresh-club case:
+ * nothing stored, nothing to resume, and NEW LEAGUE costs nothing.
+ */
+await clickText('League', '.menu-opt');
 await sleep(600);
-check('the League tile opens the league screen', await exists('.league-screen'));
+check('the League tile opens the league gate', await exists('.league-gate'));
+check('the gate shows no table before a league exists',
+  (await count('.league-table .lt-row')) === 0,
+  'rows=' + (await count('.league-table .lt-row')));
+check('the gate offers to start a league', await exists('.gate-actions .primary-btn'));
+/*
+ * Look the load button up by its TEXT, not by position.
+ *
+ * With a season already stored, NEW LEAGUE is also a ghost button and comes
+ * first — so `.gate-actions .ghost-btn` would quietly return the wrong control
+ * on exactly the saves that matter most.
+ */
+const loadBtn = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.gate-actions button')]
+    .find((x) => (x.textContent || '').includes('Load Existing'));
+  return b ? { label: b.textContent.trim(), disabled: b.disabled, dim: b.classList.contains('disabled') } : 'missing';
+})()`);
+check('the gate offers to load an existing league',
+  loadBtn !== 'missing' && loadBtn.label === 'Load Existing League', JSON.stringify(loadBtn));
+/*
+ * Nothing has been played, so there is nothing to resume — and the control says
+ * so by being dead rather than by being absent. A button that is missing looks
+ * like a feature that was never built; a button that is disabled with a label
+ * is a feature that is honestly not applicable yet.
+ */
+check('there is nothing to load on a fresh club',
+  loadBtn !== 'missing' && loadBtn.disabled === true, JSON.stringify(loadBtn));
+check('the dead load button is styled as dead',
+  loadBtn !== 'missing' && loadBtn.dim === true, JSON.stringify(loadBtn));
+await shot('02-league-gate');
+
+await clickText('New League', '.gate-actions button');
+await sleep(700);
+check('starting a league leaves the gate behind', !(await exists('.league-gate')));
+check('starting a league opens the league screen', await exists('.league-screen'));
+
+// ------------------------------------------------------------- 2b. league
 const ltRows = await count('.league-table .lt-row');
 check('the table lists all seven clubs', ltRows === 8, 'rows(incl head)=' + ltRows);
 check('the player row is highlighted', await exists('.lt-you'));
@@ -383,8 +464,12 @@ check('a fresh league starts every club on zero',
 await shot('02-league-table');
 
 console.log('\nleague note:', await text('.league-screen .section-note'));
-console.log('tile paint:', JSON.stringify(await css('.menu-opt',
-  ['backgroundColor', 'color', 'borderTopWidth', 'borderTopLeftRadius'])));
+/*
+ * The tile paint is read in section 1, while the menu is still on screen.
+ * It used to be logged here, but LEAGUE now opens on the gate and this point
+ * in the run is one screen past the tiles — `.menu-opt` is gone, the probe
+ * returned null, and the measurement quietly stopped measuring anything.
+ */
 console.log('you-row paint:', JSON.stringify(await css('.lt-you',
   ['backgroundColor', 'borderLeftWidth', 'borderLeftColor'])));
 
@@ -415,12 +500,21 @@ await shot('02b-league-new-armed');
 
 await clickText('New league', '.ghost-btn');
 await sleep(700);
+/*
+ * Season and progress are header CHIPS now, not a subtitle.
+ *
+ * The line under the title carried real state — how far through the season you
+ * are — so it was not deleted with the rest of the explanatory prose; it moved
+ * into the same chip furniture as the league position. Assert the chips, since
+ * `.screen-sub` is gone from the app entirely and a check against it would pass
+ * vacuously.
+ */
 check('the second tap starts the league again from nothing',
-  (await text('.league-screen .screen-sub'))?.includes('Season 1') === true,
-  await text('.league-screen .screen-sub'));
+  (await text('.league-screen .league-meta'))?.includes('Season 1') === true,
+  await text('.league-screen .league-meta'));
 check('the restarted league has nothing played',
-  (await text('.league-screen .screen-sub'))?.includes('0 of 12 played') === true,
-  await text('.league-screen .screen-sub'));
+  (await text('.league-screen .league-meta'))?.includes('0/12') === true,
+  await text('.league-screen .league-meta'));
 check('a fresh league puts the button back to unarmed',
   (await text('.league-screen'))?.includes('tap again') === false);
 
@@ -448,28 +542,60 @@ await click('.back-btn');
 await sleep(500);
 check('back from the League returns to the menu', await exists('.menu-screen'));
 
-// ------------------------------------------------------------- 3. squad
-await click('.menu-opt', 1);
-await sleep(600);
-check('the Squad tile opens the squad screen', await exists('.squad-view'));
-check('the pitch has five slots', (await count('.squad-slot')) === 5);
-check('every slot has a role label', (await count('.squad-slot-role')) === 5);
-check('an empty squad shows five empty buttons',
-  (await count('.squad-empty')) === 5);
-check('the balance strip names all four roles',
-  (await count('.squad-balance .balance-pill')) === 4);
-check('the squad note says the five is short',
-  (await text('.squad-view .section-note'))?.includes('0 of 5') === true,
-  await text('.squad-view .section-note'));
-check('the action reads "Pick Your Five"',
-  (await text('.squad-view .primary-btn'))?.includes('Pick Your Five') === true);
-await shot('04-squad-empty');
+// ------------------------------------------------------------- 3. help
+/*
+ * HELP replaced the subtitles.
+ *
+ * Every screen used to carry a line of prose under its title explaining what
+ * the screen was for — which the player could already see. All of it went, and
+ * the explanations were written down once, here, where someone who wants them
+ * can go and read them. So this section is not a nicety: it is the only place
+ * the removed text lives now, and if it does not open the app has simply lost
+ * that information.
+ *
+ * It lives on the Play screen, one tap below the two mode cards.
+ */
+await click('.play-btn');
+await sleep(800);
+check('PLAY opens the Play screen', await exists('.modes-screen'));
+const helpBtn = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modes-stack button')]
+    .find((x) => (x.textContent || '').trim() === 'Help');
+  return b ? 'ok' : 'missing';
+})()`);
+check('the Play screen offers Help', helpBtn === 'ok', helpBtn);
+await clickText('Help', '.modes-stack button');
+await sleep(700);
+check('Help opens from the Play screen', await exists('.help-body'));
+const topics = await count('.help-topic');
+check('the guide covers every topic', topics >= 7, 'topics=' + topics);
+check('every topic has a title and at least one line',
+  (await evalJs(`(() => {
+     const ts = [...document.querySelectorAll('.help-topic')];
+     return ts.length > 0 && ts.every((t) =>
+       (t.querySelector('.help-title')?.textContent || '').trim().length > 0 &&
+       t.querySelectorAll('.help-line').length > 0);
+   })()`)) === true);
+check('the guide explains how to play a match',
+  (await text('.help-body'))?.includes('On the pitch') === true);
+await shot('04-help');
 
 await click('.back-btn');
-await sleep(500);
+await sleep(600);
+/*
+ * BACK from the guide lands on the Play screen it was opened from, not on the
+ * title. The button was wired straight to the renderer, which set the state but
+ * never pushed the screen onto the history stack — so BACK skipped a level and
+ * dropped the player on the front page.
+ */
+check('back from Help returns to the Play screen', await exists('.modes-screen'));
+
+await click('.back-btn');
+await sleep(600);
+check('back from the Play screen returns to the menu', await exists('.menu-screen'));
 
 // ------------------------------------------------------------- 4. players
-await click('.menu-opt', 2);
+await clickText('Players', '.menu-opt');
 await sleep(600);
 check('the Players tile opens the players screen', await exists('.players-screen'));
 const allCards = await count('.viber-card2');
@@ -533,15 +659,30 @@ await sleep(500);
 check('back from Players returns to the menu', await exists('.menu-screen'));
 
 // ------------------------------------------------------------- 5. career
-await click('.menu-opt', 3);
+/*
+ * Tiles are clicked by LABEL, not by index.
+ *
+ * Dropping the SQUAD tile shifted every index after it, and an index-based
+ * harness fails by quietly opening the wrong screen — every assertion below
+ * would then be made against a screen the run never meant to visit. A label
+ * cannot drift.
+ */
+await clickText('Career', '.menu-opt');
 await sleep(600);
 check('the Career tile opens the career screen', await exists('.career-screen'));
 check('the stat grid has eight cells', (await count('.stat-cell')) === 8);
 check('career totals start at zero',
   (await text('.stat-cell .stat-num')) === '0', await text('.stat-cell .stat-num'));
 check('the form panel says there is no form yet', await exists('.form-empty'));
+/*
+ * The empty-state lines lost their tails with the rest of the prose — "No win
+ * on the board yet." is now "No win yet.", and the season-history line no
+ * longer explains how to file one. An empty panel still has to say why it is
+ * empty, so the lines stay; they just stopped being sentences.
+ */
 check('the best-result panel says there is no win yet',
-  (await text('.career-screen'))?.includes('No win on the board yet') === true);
+  (await text('.career-screen'))?.includes('No win yet.') === true,
+  await text('.career-panel .panel-sub'));
 check('the history panel says no season is filed',
   (await text('.career-screen'))?.includes('No completed seasons yet') === true);
 await shot('08-career-empty');
@@ -550,7 +691,7 @@ await click('.back-btn');
 await sleep(500);
 
 // ------------------------------------------------------------- 6. settings
-await click('.menu-opt', 4);
+await clickText('Settings', '.menu-opt');
 await sleep(600);
 check('the Settings tile opens the settings screen', await exists('.settings-screen'));
 check('there are four setting groups', (await count('.settings-group')) === 4);
@@ -592,7 +733,7 @@ await shot('10-settings-armed');
 
 await click('.back-btn');
 await sleep(500);
-await click('.menu-opt', 4);
+await clickText('Settings', '.menu-opt');
 await sleep(600);
 check('the match length survived leaving the screen',
   (await text('.setting-row .seg-btn.active'))?.includes('2 Min') === true);
@@ -656,7 +797,7 @@ async function returnToMenu() {
 
 // ------------------------------------------------------------- 7. the loop
 // First pass: prove the stored match length actually reaches the match setup.
-await click('.menu-opt', 0);
+await clickText('League', '.menu-opt');
 await sleep(600);
 check('back on the League screen', await exists('.league-screen'));
 
@@ -681,9 +822,14 @@ check('the strip names both halves',
     (await text('.strip-group.bench .strip-label')) === '7 in reserve',
   `${await text('.strip-group.start .strip-label')} / ${await text('.strip-group.bench .strip-label')}`);
 check('the strip starts empty', (await count('.strip-slot.filled')) === 0);
-check('the picker says the first five start',
-  (await text('.screen-sub'))?.includes('first five start') === true,
-  await text('.screen-sub'));
+/*
+ * The line that used to spell the rule out — "the first five start" — is gone
+ * with every other subtitle. The strip's own two labels carry it now ("Starting
+ * five" / "7 in reserve", asserted directly above), so there is nothing left to
+ * check here; a check against `.screen-sub` would pass against `null`.
+ */
+check('the picker no longer explains itself in prose',
+  !(await exists('.hero-select .screen-sub')));
 
 await clickText('Auto', 'button');
 await sleep(700);
@@ -763,9 +909,14 @@ await shot('13-minutes');
 await click('.primary-btn');
 await sleep(700);
 check('the flow reaches the opponent screen', await exists('.vs-row'));
-check('the opponent screen names the league round',
-  (await text('.screen-sub'))?.includes('Round') === true,
-  await text('.screen-sub'));
+/*
+ * Which round this is, and whether it is home or away, moved from the subtitle
+ * into a header chip. It is real state a player acts on, so it was not deleted
+ * with the rest of the prose — it just stopped being a sentence.
+ */
+check('the opponent screen names the league round in a chip',
+  (await text('.fixture-meta'))?.includes('Round') === true,
+  await text('.fixture-meta'));
 check('the opponent screen shows both fives',
   (await count('.vs-side')) === 2 && (await count('.vs-avatars')) === 2);
 check('the conditions strip names the pitch and length',
@@ -804,7 +955,7 @@ await send('Page.navigate', { url });
 await sleep(8500);
 await freeze();
 
-await click('.menu-opt', 0);
+await clickText('League', '.menu-opt');
 await sleep(600);
 await clickText('Play Next Match', '.primary-btn');
 await sleep(800);
@@ -1001,8 +1152,47 @@ const filed = await evalJs(`(() => {
 })()`);
 check('the result is stored against the fixture', filed?.keys === 1, JSON.stringify(filed));
 
-await clickText('Back to the League', '.primary-btn');
-await sleep(900);
+/*
+ * The squad view, reached the only way left to reach it.
+ *
+ * This screen used to have its own front-page tile, and the checks that used to
+ * live there clicked it. That tile is gone — the screen survives as this
+ * shortcut on the result panel — so the assertions move here, where the door
+ * actually is. Testing a screen through a route that no longer exists is how a
+ * green run stops meaning anything.
+ */
+await clickText('Squad', '.ghost-btn');
+await sleep(800);
+check('the result shortcut opens the read-only squad view', await exists('.squad-view'));
+check('the squad view still shows the five on the pitch',
+  (await count('.squad-view .squad-slot')) === 5,
+  'slots=' + (await count('.squad-view .squad-slot')));
+check('every slot in the squad view has a role label',
+  (await count('.squad-view .squad-slot-role')) === 5);
+check('the squad view still names all four roles in the balance strip',
+  (await count('.squad-view .squad-balance .balance-pill')) === 4);
+/*
+ * The five are picked automatically before the match, so the side is full and
+ * the note that explains a SHORT side is correctly absent. Assert the absence:
+ * a note that appears when it should not is as wrong as one that does not.
+ */
+check('a full five carries no "you are short" note',
+  !(await exists('.squad-view .section-note')));
+await shot('17b-squad-view');
+
+/*
+ * Leave the way a player would: reload, then walk in from the front page.
+ *
+ * The squad view is reached with `record = false`, so BACK from it pops the
+ * PRE-MATCH stack and lands on the opponent screen of a match already played.
+ * Rather than encode that accident, reload — everything that matters is on
+ * disk, and this is also a second, free proof that the result persisted.
+ */
+await send('Page.navigate', { url });
+await sleep(8500);
+await freeze();
+await clickText('League', '.menu-opt');
+await sleep(800);
 check('the result returns to the League', await exists('.league-screen'));
 const playedCell = await text('.lt-you .lt-num');
 check('the player row now shows one played', playedCell === '1', 'played=' + playedCell);
@@ -1036,7 +1226,7 @@ await shot('19-fixtures-after');
 // ------------------------------------------------------------- 8. career again
 await click('.back-btn');
 await sleep(500);
-await click('.menu-opt', 3);
+await clickText('Career', '.menu-opt');
 await sleep(600);
 check('the career screen is reachable after a match', await exists('.career-screen'));
 check('career totals now count the match',
@@ -1052,8 +1242,19 @@ await sleep(8500);
 await freeze();
 check('the season survives a reload', await exists('.menu-screen'));
 check('the reload does not fall back to onboarding', !(await exists('.profile-screen')));
-await click('.menu-opt', 0);
+await clickText('League', '.menu-opt');
 await sleep(800);
+/*
+ * And the league gate does not come back.
+ *
+ * This is the whole point of the gate being gated on `leagueStartedAt` rather
+ * than on "are there any results": a manager who has played one fixture must
+ * land straight back in their season, not be asked to start or load one. The
+ * gate is for the FIRST visit. Asserting it here — after a reload, with a
+ * result on disk — is the only way to prove the difference.
+ */
+check('a league already on the device skips the gate',
+  !(await exists('.league-gate')), 'gate=' + (await exists('.league-gate')));
 check('the stored result survived the reload',
   (await text('.lt-you .lt-num')) === '1',
   'played=' + (await text('.lt-you .lt-num')));
@@ -1085,7 +1286,7 @@ check('there was a squad member to injure', typeof injuredId === 'string' && inj
 await send('Page.navigate', { url });
 await sleep(8500);
 await freeze();
-await click('.menu-opt', 0);
+await clickText('League', '.menu-opt');
 await sleep(800);
 check('the league screen lists who is out', await exists('.league-screen .out-list'));
 check('the casualty list names one player',
@@ -1129,9 +1330,17 @@ await shot('27-modes');
 await clickText('Quick Play', '.mode-card');
 await sleep(800);
 check('Quick Play opens the squad picker', await exists('.hero-select'));
-check('the picker asks for five, not twelve',
-  (await text('.hero-select .screen-sub'))?.includes('These five take the pitch') === true,
-  await text('.hero-select .screen-sub'));
+/*
+ * The friendly picker asks for five, not twelve — and the line that used to say
+ * so in words is gone. The shape says it instead: one group, five slots, no
+ * reserve row. Assert the structure, because that is what a player sees.
+ */
+check('the friendly picker offers exactly five slots',
+  (await count('.hero-select .strip-slot')) === 5,
+  'slots=' + (await count('.hero-select .strip-slot')));
+check('the friendly picker names its one group',
+  (await count('.hero-select .strip-group')) === 1,
+  'groups=' + (await count('.hero-select .strip-group')));
 const quickStrip = await evalJs(`(() => {
   const s = document.querySelector('.hero-select .squad-strip');
   return s ? {
@@ -1245,7 +1454,7 @@ await sleep(1000);
 check('a friendly ends back at the title', await exists('.menu-screen'));
 
 // Back to the league, where the next fixture is still waiting.
-await click('.menu-opt', 0);
+await clickText('League', '.menu-opt');
 await sleep(900);
 check('the league is exactly where the friendly found it',
   (await text('.lt-you .lt-num')) === '1' &&

@@ -11,8 +11,11 @@ import {
   currentSeasonSummary,
   defaultCareer,
   fitSquad,
+  hasStoredLeague,
   isAvailable,
+  leagueExists,
   loadCareer,
+  loadExistingLeague,
   newLeague,
   sanitiseLineup,
   saveCareer,
@@ -558,6 +561,73 @@ describe('a new league', () => {
     expect(fresh.lineup).toEqual(squad);
     expect(fresh.settings.halfSeconds).toBe(60);
     expect(fresh.createdAt).toBe(c.createdAt);
+  });
+});
+
+/*
+ * A club is not a season.
+ *
+ * The League screen is gated on `leagueStartedAt` so that a manager who has only
+ * just named their club is not shown a table of seven teams on zero as though a
+ * competition had been played and nobody had turned up. The migration is the
+ * interesting part: a save written before the field existed still holds a season
+ * the manager was part way through, so it must load as "no league yet" — which
+ * is what puts LOAD EXISTING LEAGUE in front of them instead of a fresh table.
+ */
+describe('the league gate', () => {
+  const squad = ROSTER.slice(0, 5).map((v) => v.id);
+
+  it('opens with no league, only a club', () => {
+    expect(leagueExists(defaultCareer(1))).toBe(false);
+    expect(hasStoredLeague(defaultCareer(1))).toBe(false);
+  });
+
+  it('counts a league as existing once it is created', () => {
+    expect(leagueExists(newLeague(defaultCareer(1), 7))).toBe(true);
+  });
+
+  it('has nothing to load until a match has been played or a season filed', () => {
+    const empty = newLeague(defaultCareer(1), 7);
+    expect(hasStoredLeague(empty)).toBe(false);
+
+    const played = win(empty, playerFixtures()[0]);
+    expect(hasStoredLeague(played)).toBe(true);
+  });
+
+  it('loads a stored league without touching a thing in it', () => {
+    const f = playerFixtures()[0];
+    const played = win(withLineup(newLeague(defaultCareer(1), 7), squad), f);
+
+    const loaded = loadExistingLeague(played);
+    expect(leagueExists(loaded)).toBe(true);
+    expect(loaded.results).toEqual(played.results);
+    expect(loaded.season).toBe(played.season);
+    expect(loaded.lineup).toEqual(played.lineup);
+  });
+
+  it('resumes a save that predates the gate instead of wiping it', () => {
+    // The migration contract. `loadCareer` reads a missing `leagueStartedAt` as
+    // null, so an old save lands on the gate with its season intact — and LOAD
+    // EXISTING LEAGUE is what gets the manager back into it.
+    const f = playerFixtures()[0];
+    const played = win(withLineup(defaultCareer(1), squad), f);
+    saveCareer(played);
+
+    const raw = JSON.parse(localStorage.getItem('viber-league:career:v1') as string);
+    delete raw.leagueStartedAt;
+    localStorage.setItem('viber-league:career:v1', JSON.stringify(raw));
+
+    const loaded = loadCareer();
+    expect(loaded).not.toBeNull();
+    expect(leagueExists(loaded as CareerState)).toBe(false);
+    expect(hasStoredLeague(loaded as CareerState)).toBe(true);
+    expect((loaded as CareerState).results).toEqual(played.results);
+  });
+
+  it('keeps the league across a close season', () => {
+    // A new SEASON is not a new league, so the gate must not come back every year.
+    const c = startNextSeason(newLeague(defaultCareer(1), 7), 8);
+    expect(leagueExists(c)).toBe(true);
   });
 });
 

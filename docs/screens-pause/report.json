@@ -9,12 +9,12 @@
     "buttons": [
       "Resume",
       "Substitutions · 3",
-      "Quit to League"
+      "Quit"
     ],
     "l": 192,
     "r": 652,
-    "sh": 368,
-    "ch": 368
+    "sh": 322,
+    "ch": 322
   },
   "confirm": {
     "buttons": [

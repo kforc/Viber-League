@@ -66,12 +66,16 @@ await evalJs(`(() => { try {
     iterations: 100000, createdAt: '2026-10-09T00:00:00.000Z' }));
   localStorage.setItem('viber-league:career:v1', JSON.stringify({
     season: 1, seed: 5, results: {}, lineup: [], history: [],
+    // LEAGUE opens on a gate until a league exists, so the seed has to say one
+    // does — otherwise this probe lands on NEW LEAGUE / LOAD EXISTING LEAGUE and
+    // the match never starts.
+    leagueStartedAt: '2026-10-09T00:00:00.000Z',
     settings: { halfSeconds: ${HALF}, weather: 'sun', reducedMotion: false } }));
 } catch {} return 1; })()`);
 await send('Page.navigate', { url });
 await sleep(8500);
 
-await click('.menu-opt', 0); await sleep(600);
+await clickText('League', '.menu-opt'); await sleep(600);
 await clickText('Play Next Match', '.primary-btn'); await sleep(800);
 await clickText('Auto', 'button'); await sleep(700);
 await click('.primary-btn'); await sleep(700);

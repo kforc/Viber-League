@@ -299,14 +299,6 @@ body {
     drop-shadow(0 8px 0 rgba(0, 0, 0, 0.8));
 }
 
-.tagline {
-  margin: 6px 0 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink-dim);
-  letter-spacing: 0.02em;
-}
-
 .hint {
   margin: 0;
   font-size: 11.5px;
@@ -344,14 +336,6 @@ body {
   -webkit-text-stroke: 3.5px var(--outline);
   paint-order: stroke fill;
   text-shadow: 0 4px 0 rgba(0, 0, 0, 0.75);
-}
-
-.screen-sub {
-  margin: 5px 0 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-dim);
-  line-height: 1.35;
 }
 
 /* ==========================================================================
@@ -1360,18 +1344,6 @@ body {
   border-radius: var(--r-lg);
 }
 
-.play-btn .play-sub {
-  display: block;
-  margin-top: 3px;
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  /* Dark ink on lime goes muddy fast — keep this well above half opacity. */
-  opacity: 0.8;
-}
-
 .menu-options {
   display: flex;
   flex-wrap: wrap;
@@ -1878,10 +1850,6 @@ body {
 
 .profile-head .screen-title {
   font-size: clamp(22px, 6.4vw, 34px);
-}
-
-.profile-head .screen-sub {
-  max-width: 34ch;
 }
 
 .profile-form {
@@ -2956,25 +2924,16 @@ body {
   border-top: none;
 }
 
-.setting-text {
+/* The label takes the slack now that there is no help line under it, so the
+   control still sits hard right. */
+.setting-label {
   flex: 1 1 190px;
   min-width: 0;
   text-align: left;
-}
-
-.setting-label {
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 800;
   color: var(--cream);
-}
-
-.setting-help {
-  margin-top: 1px;
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--ink-mute);
 }
 
 /* A segmented pick-one control. */
@@ -3348,14 +3307,11 @@ body {
 .dive-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dive-btn { min-width: 0; padding: 12px 8px; text-align: center; align-items: center; }
 .dive-btn .choice-label { font-size: clamp(13px, 3.5vw, 17px); white-space: nowrap; }
-.dive-btn .choice-hint { font-size: 10px; line-height: 1.2; }
 .penalty-panel { width: min(540px, 100%); }
-.penalty-hint { margin: 10px 0 0; text-align: center; font-size: 11px; color: var(--cream); opacity: 0.8; }
 
 /* Pause menu — reuses the overlay-screen scaffold; buttons stack full-width. */
 .pause-screen { justify-content: center; }
 .pause-panel { width: min(420px, 100%); text-align: center; }
-.pause-panel .panel-sub { margin-bottom: 14px; }
 .menu-btn-row { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 .menu-btn {
   position: relative;
@@ -3599,12 +3555,6 @@ body {
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--cream);
-}
-
-.choice-hint {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-dim);
 }
 
 /* ==========================================================================
@@ -4535,9 +4485,6 @@ body {
     padding: 3px 10px 3px 4px;
     font-size: 9px;
   }
-  .tagline {
-    display: none;
-  }
   .menu-spacer {
     min-height: 76px;
   }
@@ -4550,11 +4497,7 @@ body {
     font-size: 21px;
     border-radius: var(--r-md);
   }
-  .play-btn .play-sub {
-    font-size: 9px;
-    margin-top: 1px;
-  }
-  /* The five "Soon" tiles become one row so they stop eating the hero band. */
+  /* The four section tiles share one row so they stop eating the hero band. */
   .menu-options {
     flex-wrap: nowrap;
     gap: 6px;
@@ -4591,10 +4534,6 @@ body {
   }
   .hero-select .screen-head {
     grid-area: head;
-  }
-  /* The subtitle is the first thing to go when the viewport is this short. */
-  .hero-select .screen-sub {
-    display: none;
   }
   .hero-select .hero-stage {
     grid-area: stage;
@@ -4790,9 +4729,6 @@ body {
   .venue-screen .screen-head {
     grid-area: head;
   }
-  .venue-screen .screen-sub {
-    display: none;
-  }
   .venue-screen .venue-stage {
     grid-area: scene;
     display: flex;
@@ -4888,11 +4824,6 @@ body {
   }
   .profile-head .screen-title {
     font-size: clamp(18px, 3.4vw, 26px);
-  }
-  /* The explanation goes first when the viewport is this short; the labels
-     still say what every field is. */
-  .profile-head .screen-sub {
-    display: none;
   }
   .profile-form {
     display: grid;
@@ -5208,13 +5139,6 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink);
-}
-
-.strip-hint {
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--ink-mute);
 }
 
 .strip-slots {
@@ -5727,8 +5651,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 13px 12px 11px;
+  gap: 3px;
+  padding: 13px 12px 12px;
   border-radius: var(--r-md);
   font-family: var(--font-display);
   text-align: left;
@@ -5752,16 +5676,7 @@ body {
   color: var(--lime);
 }
 
-.mode-sub {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--ink-dim);
-}
-
 .mode-meta {
-  margin-top: 3px;
   font-size: 9px;
   font-weight: 800;
   line-height: 1.4;
@@ -5770,3 +5685,130 @@ body {
   color: var(--ink-mute);
 }
 
+
+/* ==========================================================================
+   LEAGUE GATE — the choice before the table
+   ========================================================================== */
+
+/*
+ * The two actions stack full-width rather than sharing a row. They are the only
+ * things on the screen, so a 50/50 split would make the primary look like one of
+ * two equal options instead of the route.
+ */
+.gate-actions {
+  flex-direction: column;
+  gap: 9px;
+}
+
+.gate-actions .primary-btn,
+.gate-actions .ghost-btn {
+  flex: none;
+  width: 100%;
+}
+
+/* Nothing to resume: the button stays visible and says why, because a control
+   that cannot be told apart from a broken one is worse than one that is gone. */
+.ghost-btn.wide.disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* The Play screen's cards and its Help button, one column. Separate from
+   .flow-actions, which is a sticky shelf — these must stay in the document
+   flow so the spacer still pushes them to the bottom edge. */
+.modes-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
+/* ==========================================================================
+   HELP — the game guide
+   ========================================================================== */
+
+.help-body {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.help-topic + .help-topic {
+  margin-top: 14px;
+}
+
+.help-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+
+/* A guide is body copy: it gets the brightest ink and the widest measure the
+   column allows, not the muted tone reserved for chrome. */
+.help-line {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.help-line + .help-line {
+  margin-top: 5px;
+}
+
+/* ==========================================================================
+   HEADER CHIPS — state that survived the subtitle purge
+   ========================================================================== */
+
+/*
+ * Season, league position and which fixture this is used to sit in a line of
+ * prose under the title. They are state a manager acts on, so they move into the
+ * chip language the header already speaks rather than being deleted with the
+ * prose around them.
+ */
+.head-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.league-meta,
+.fixture-meta {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  background: var(--panel-2);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+/* The substitutes counter: how many swaps are left. State, not a subtitle, so it
+   gets readable ink rather than the muted chrome tone. */
+.subs-count {
+  margin: 2px 0 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
