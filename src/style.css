@@ -647,9 +647,24 @@ body {
 /* ---- dramatic selected state: a lime frame around a lime-tinted card ---- */
 .viber-card2.selected {
   border-color: var(--lime);
+  /*
+   * The panel layer is NOT optional here.
+   *
+   * This used to be the role glow over `rgba(223, 249, 2, 0.1)` and nothing
+   * else — a 10%-alpha wash with no opaque layer under it. The card's own
+   * background was therefore 90% transparent, and the 3D stage behind the UI
+   * showed straight through the pick: the giant hero model, the pitch and the
+   * stands all sat inside the card, over the name and the role bar. It was only
+   * ever visible on the SELECTED card, which is the one the player is looking
+   * at, and it is worst on the warm roles whose glow is brightest.
+   *
+   * So the tint now sits ON the panel rather than replacing it, the way the
+   * unselected card already worked.
+   */
   background:
     radial-gradient(105% 62% at 50% 4%, var(--role-glow, rgba(255, 255, 255, 0.16)), transparent 62%),
-    rgba(223, 249, 2, 0.1);
+    rgba(223, 249, 2, 0.1),
+    var(--panel-2);
   transform: translateY(-5px) scale(1.035);
   z-index: 3;
   box-shadow: 0 5px 0 rgba(0, 0, 0, 0.7), 0 0 18px rgba(223, 249, 2, 0.18);
@@ -3455,6 +3470,16 @@ body {
   font-weight: 700;
   color: var(--ink-mute);
 }
+/* Who is already off, so a short "On the pitch" column has a visible reason.
+   `--ink-dim` rather than `--ink-mute`: this is a line the manager has to be
+   able to read while working out whether they can still cover a position. */
+.subs-gone {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
 .sub-row {
   display: flex;
   align-items: center;
@@ -4579,7 +4604,10 @@ body {
   }
   .hero-select .hero-body {
     grid-area: body;
-    gap: 6px;
+    /* Four children stack in this column and every gap between them is taken
+       from the card rail, which is the only flexible row here. 4px instead of
+       6px buys the rail 6px and changes nothing else. */
+    gap: 4px;
   }
   .hero-select .flow-footer {
     grid-area: foot;
@@ -4590,7 +4618,7 @@ body {
     gap: 6px;
     /* Both chip rows are above the card rail, and every pixel they take comes
        straight out of the cards. */
-    padding: 1px 0 2px;
+    padding: 1px 0 0;
   }
   .hero-select .chip {
     /* Still taller than the 5px this used to be — a comfortable target — but
@@ -4599,10 +4627,11 @@ body {
     font-size: 10px;
   }
   /* The 0/5 counter is a readout, not a control, and at 68px it was the single
-     largest thing in the header — 68px of a 390px screen. 52px still reads. */
+     largest thing in the header — 68px of a 390px screen. 48px still reads, and
+     the 4px it gives back go to the card rail, which needs every one of them. */
   .hero-select .pick-ring {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
   }
   .hero-select .pick-ring .ring-label b {
     font-size: 18px;
@@ -4689,22 +4718,22 @@ body {
     font-size: 10px;
   }
   .hero-select .card-art {
-    height: 50px;
+    height: 46px;
     margin-top: 2px;
   }
   .hero-select .card-art::before {
-    width: 58px;
-    height: 58px;
+    width: 52px;
+    height: 52px;
   }
   .hero-select .card-art::after {
-    width: 56px;
-    height: 12px;
+    width: 52px;
+    height: 11px;
   }
   /* `viberAvatar()` writes `--vv-scale` as an INLINE style, so only an
      `!important` declaration can override it from here. At 1.15 the avatar is
      80px tall — half the card's entire budget. */
   .hero-select .card-art .vv-avatar {
-    --vv-scale: 0.68 !important;
+    --vv-scale: 0.6 !important;
   }
   .hero-select .card-meta {
     margin-top: 3px;
@@ -4716,8 +4745,8 @@ body {
     font-size: 9.5px;
   }
   .hero-select .card-role {
-    margin-top: 3px;
-    padding: 3px 6px;
+    margin-top: 2px;
+    padding: 2px 6px;
     font-size: 9.5px;
   }
   .hero-select .card-add {
@@ -5069,5 +5098,599 @@ body {
   }
   .overlay-screen {
     background: rgba(4, 6, 5, 0.93);
+  }
+}
+
+/* ==========================================================================
+   Availability — injuries, suspensions and the twelve-man squad
+   ==========================================================================
+   The squad is twelve and five of them play, which means the single most
+   important thing these screens have to say is WHO CANNOT PLAY. That is what
+   this block is for. Two rules run through all of it:
+
+     1. State is never carried by colour alone. Every badge is a word ("OUT 2",
+        "RED 1") on a solid fill with a black outline, so it survives a
+        colour-blind player and a greyscale screenshot alike.
+     2. A player who is out keeps FULL-contrast text. Dimming the whole card is
+        the obvious move and the wrong one — it costs legibility on exactly the
+        cards a manager is squinting at to work out who is missing. The state is
+        carried by the art, the role glow and the badge instead.
+
+   Colours: amber for a knock, red for a ban. Both are solid fills carrying
+   near-black text, so contrast is around 10:1 either way. */
+
+.card-out {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  /* 1.4, not 1: Baloo 2's inline content area is ~1.36em and this chip has no
+     room to spare. See the .card-meta note above. */
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.card-out.injury {
+  background: #fbbf24;
+  color: #2f1d00;
+}
+
+.card-out.suspension {
+  background: #ff5b5b;
+  color: #2a0606;
+}
+
+/* The art is the only thing that dims. The name, epithet and role bar stay at
+   full strength. */
+.viber-card2.is-out .card-art .vv-avatar {
+  filter: grayscale(0.85) brightness(0.62) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+
+.viber-card2.is-out {
+  --role-glow: rgba(255, 255, 255, 0.05);
+}
+
+/* A disabled `+` that still looks like a lime button reads as a rendering bug.
+   This one looks like what it is: a control that is not for you. */
+.card-add.blocked {
+  opacity: 0.55;
+  filter: none;
+  background: var(--panel-2);
+  color: var(--ink-mute);
+}
+
+/* ---- the squad strip ----
+   Twelve numbered slots, split into the five who play and the seven who cover.
+   It is the only place the "first five start" rule is STATED rather than
+   implied, and a filled slot is a button into that player's card, so the strip
+   is a way into the squad rather than just a picture of it. */
+.squad-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: var(--r-lg);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+}
+
+.strip-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.strip-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.strip-hint {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+
+.strip-slots {
+  display: flex;
+  gap: 5px;
+}
+
+/*
+ * The five who play are always ONE ROW OF FIVE. That row is the "the first five
+ * start" rule stated in layout rather than in words, so it does not wrap and
+ * its chips share the width evenly.
+ *
+ * The reserves do wrap, because seven chips do not fit across a phone and the
+ * alternative is a truncated name — and "CHIM…" is not a name. The chip is
+ * given a floor wide enough for the longest Viber in the roster (TANGERINE,
+ * PERISCOPE, MIDNIGHT) so the row breaks rather than the word does.
+ */
+.strip-group.start .strip-slots {
+  flex-wrap: nowrap;
+}
+
+.strip-group.bench .strip-slots {
+  flex-wrap: wrap;
+}
+
+.strip-group.bench .strip-slot {
+  flex: 1 1 auto;
+  min-width: 64px;
+}
+
+.strip-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 3px 2px;
+  border-radius: 9px;
+  border: 2px dashed var(--rule);
+  background: transparent;
+}
+
+.strip-slot.empty .strip-n {
+  color: var(--ink-mute);
+}
+
+.strip-slot.filled {
+  padding: 3px 4px;
+  border-style: solid;
+  border-color: var(--outline);
+  /* The role colour rides the top edge, so the shape of the squad — keeper,
+     defender, midfielders, forward — is legible at a glance. */
+  border-top: 3px solid var(--role, var(--lime));
+  background: var(--panel);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  transition: transform 0.07s ease, box-shadow 0.07s ease;
+}
+
+.strip-slot.filled:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.strip-n {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+
+/* The slot's top line: the squad number, and — when the player is out — the
+   badge, in the same words the cards use. Two screens, one vocabulary. */
+.strip-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.strip-tag {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.strip-tag.injury {
+  background: #fbbf24;
+  color: #2f1d00;
+}
+
+.strip-tag.suspension {
+  background: #ff5b5b;
+  color: #2a0606;
+}
+
+/* An out slot is still fully legible — the player has to be able to read WHO is
+   missing — so the state is carried by the badge and a colour on the top edge,
+   not by fading the text. */
+.strip-slot.filled.is-out {
+  background: rgba(40, 12, 12, 0.55);
+}
+
+.strip-slot.filled.is-out.suspension {
+  border-top-color: #ff5b5b;
+}
+
+.strip-slot.filled.is-out.injury {
+  border-top-color: #fbbf24;
+}
+
+.strip-name {
+  max-width: 100%;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- the treatment room ----
+   Shared by the league screen, the squad screen and full time. One look, three
+   places, so a player learns to read it once. */
+.out-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: var(--r-lg);
+  background: rgba(40, 12, 12, 0.55);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+}
+
+.out-list-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.out-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.out-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border-left: 3px solid var(--red);
+}
+
+.out-row.injury {
+  border-left-color: #fbbf24;
+}
+
+.out-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.out-role,
+.out-why {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.out-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  background: #ff5b5b;
+  color: #2a0606;
+}
+
+.out-row.injury .out-tag {
+  background: #fbbf24;
+  color: #2f1d00;
+}
+
+/* On full time the block sits inside a panel, not on the page background, so it
+   needs no card of its own — just a quieter frame. */
+.result-out {
+  background: rgba(40, 12, 12, 0.45);
+  margin: 8px 0 0;
+}
+
+/* ---- reserves ----
+   The seven who do not start. Listed rather than shown as cards: a manager
+   scanning this wants a roll call, not a gallery. */
+.reserve-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: var(--r-lg);
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+}
+
+.reserve-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.reserve-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.reserve-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid transparent;
+  border-left: 3px solid var(--role, var(--lime));
+}
+
+.reserve-row.is-out {
+  background: rgba(40, 12, 12, 0.4);
+}
+
+.reserve-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reserve-role {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  color: var(--ink-mute);
+}
+
+.reserve-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.reserve-tag.fit {
+  background: var(--panel);
+  color: var(--ink-dim);
+}
+
+.reserve-tag.injury {
+  background: #fbbf24;
+  color: #2f1d00;
+}
+
+.reserve-tag.suspension {
+  background: #ff5b5b;
+  color: #2a0606;
+}
+
+/* ---- the detail sheet's availability banner ----
+   Stated before the attributes, because a card that looks addable and is not
+   is the exact problem this whole feature exists to solve. */
+.sheet-out {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-lg);
+  border: 3px solid var(--outline);
+  background: rgba(40, 12, 12, 0.6);
+}
+
+.sheet-out-tag {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 2px solid var(--outline);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  background: #ff5b5b;
+  color: #2a0606;
+}
+
+.sheet-out.injury .sheet-out-tag {
+  background: #fbbf24;
+  color: #2f1d00;
+}
+
+.sheet-out-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+/* The strip's slots and the reserve rows are buttons; a lime ring is no ring at
+   all on these, so they take the cream one like everything else. */
+.strip-slot.filled:focus-visible,
+.reserve-row:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 2px;
+}
+
+/* High contrast: the out blocks stop being tinted and become plain, and the
+   left-edge rule thickens so the injury/suspension distinction survives the
+   loss of the background wash. */
+@media (prefers-contrast: more) {
+  .out-list,
+  .result-out,
+  .sheet-out,
+  .reserve-row.is-out {
+    background: rgba(0, 0, 0, 0.85);
+  }
+  .out-row,
+  .reserve-row {
+    background: #000;
+    border: 2px solid var(--rule);
+    border-left-width: 5px;
+  }
+}
+
+/* ---- the squad strip, landscape ----
+   Declared last so it wins on cascade order against the portrait rules above
+   without needing to out-specify them.
+
+   Landscape is 390px tall and the card rail was already sized to the pixel —
+   adding a 126px two-row strip clipped a picked card by 53px, which the flow
+   harness catches and which is exactly the sort of thing a screenshot shows and
+   an assertion does not. So the strip collapses to a single row of numbered
+   chips and states its split in one legend line instead of two headings: ~46px
+   rather than ~126px, which gives the rail back more than it lost.
+
+   The chips keep their numbers, their role colour and their out state. The NAME
+   goes, because the cards below carry it — and the out badge is kept in words
+   for the chips that need it, since colour alone must never carry that state. */
+.strip-legend {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  /*
+   * Two rows, not three.
+   *
+   * The strip is a column by default: legend, starting five, reserves. Stacked
+   * here that is three rows of ~24px plus a legend, and every one of those
+   * pixels comes straight out of the card rail below — which is exactly how the
+   * cards ended up clipped top AND bottom, with the rating plates sliced in half
+   * and the role bars cut off. So the strip becomes a wrapping row: the legend
+   * takes a line of its own and the two groups then SHARE the next one.
+   */
+  .hero-select .squad-strip {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    padding: 3px 8px;
+  }
+  .hero-select .squad-strip .strip-head {
+    display: none;
+  }
+  .hero-select .squad-strip .strip-group {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0;
+  }
+  /* The divider that replaces the two headings. */
+  .hero-select .squad-strip .strip-group.bench .strip-slots {
+    padding-left: 8px;
+    border-left: 2px solid var(--rule);
+  }
+  .hero-select .squad-strip .strip-slots {
+    gap: 3px;
+    /* Landscape has no room for a wrapped row: the strip is one line here and
+       the names are hidden, so the chips are sized to share it instead. This
+       has to out-declare the base `.strip-group.bench .strip-slots`, which
+       wraps — equal specificity, so it is the ORDER that decides. */
+    flex-wrap: nowrap;
+  }
+  /* Chips share the row rather than being pinned to 24px, so the strip can
+     never push past the column it lives in — the right-hand column here is
+     only ~470px wide. */
+  .hero-select .squad-strip .strip-slot {
+    flex: 1 1 0;
+    min-width: 16px;
+    min-height: 22px;
+    padding: 0;
+  }
+  /* An out chip keeps its badge and takes the width it needs. */
+  .hero-select .squad-strip .strip-slot.is-out {
+    flex: 0 0 auto;
+    padding: 1px 5px;
+  }
+  .hero-select .squad-strip .strip-name {
+    display: none;
+  }
+  .hero-select .squad-strip .strip-top {
+    gap: 3px;
+  }
+  .hero-select .squad-strip .strip-legend {
+    display: flex;
+    /* A line of its own, so the groups below it share one row between them. */
+    flex: 0 0 100%;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.4;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+  .hero-select .squad-strip .strip-legend-sep {
+    color: var(--ink-mute);
   }
 }

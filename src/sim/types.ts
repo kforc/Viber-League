@@ -104,6 +104,17 @@ export interface Player {
   facing: number; // radians
   attrs: Attributes;
   isGK: boolean;
+  /**
+   * Why this player is no longer on the pitch, if they are not. A sent-off or
+   * injured player is parked off it and skipped by the AI, so the side plays a
+   * player short — the whole point of a red card.
+   *
+   * The player stays in `world.players` rather than being spliced out: the
+   * renderer binds a rig per player at kick-off and the ball may still reference
+   * their id, so removing the entry would leave both dangling. Parking keeps
+   * every id stable and lets the model visibly walk to the touchline.
+   */
+  off?: 'red' | 'injury';
   // AI runtime
   decision: Decision;
   think: number; // seconds until next decision
@@ -177,6 +188,17 @@ export type SimEvent =
   | { type: 'special'; team: TeamId; player: number }
   | { type: 'setpiece'; kind: SetPieceKind; team: TeamId }
   | { type: 'foul'; team: TeamId; player: number; penalty: boolean }
+  /**
+   * Discipline.
+   *
+   * `matches` is how many LEAGUE FIXTURES the player will miss AFTER this one.
+   * A yellow carries no ban, so it reports 0; a red reports 1-2 and an injury
+   * 1-3. The sim decides the number because the roll comes off the seeded
+   * `disciplineRng` — the career layer records it rather than inventing it, so
+   * the same seed always produces the same injury list.
+   */
+  | { type: 'card'; team: TeamId; player: number; card: 'yellow' | 'red'; off: boolean; matches: number }
+  | { type: 'injury'; team: TeamId; player: number; matches: number }
   | { type: 'halftime' }
   | { type: 'fulltime'; score: [number, number] }
   /**
@@ -231,6 +253,16 @@ export interface World {
   stats: MatchStats;
   events: SimEvent[];
   rng: Rng;
+  /**
+   * A SECOND, independent stream for cards and injuries.
+   *
+   * Kept separate on purpose. The main `rng` sequence decides every pass, shot
+   * and tackle, so drawing discipline rolls from it would shift every later
+   * value and silently change the outcome of matches that have nothing to do
+   * with discipline — including the pinned replays the test suite compares. Its
+   * own stream means adding cards changed no existing result.
+   */
+  disciplineRng: Rng;
   possession: TeamId | null;
   lastGoalTeam: TeamId | null;
   /** Which team restarts play (the conceding side, per football convention). */

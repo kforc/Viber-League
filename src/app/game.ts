@@ -6,6 +6,7 @@ import type { ShowcaseOptions } from '../render/showcase';
 import {
   autoBench,
   autoOpponent,
+  benchFromSquad,
   createWorld,
   drainEvents,
   flushCommands,
@@ -20,6 +21,7 @@ import {
   type DiveDirection,
   type Mentality,
   type OpponentSelection,
+  type SimEvent,
   type WeatherKind,
   type World,
 } from '../sim';
@@ -78,15 +80,24 @@ import {
   type LocalProfile,
 } from './profile';
 import {
+  absencesFromEvents,
   clearCareer,
   currentSeasonSummary,
   defaultCareer,
+  fitSquad,
+  isAvailable,
   loadCareer,
+  newLeague,
   saveCareer,
   startNextSeason,
+  tickAbsences,
+  withAbsences,
   withLineup,
   withResult,
   withSettings,
+  LEAGUE_SQUAD_MAX,
+  SQUAD_SIZE,
+  type Absence,
   type CareerSettings,
   type CareerState,
 } from './career';
@@ -162,6 +173,21 @@ export class Game {
    * hold a Viber who has since been picked to start.
    */
   private bench: string[] = [];
+  /**
+   * Everything the referee's notebook needs from the match being played.
+   *
+   * Kept as the raw event log rather than a running tally of bans, for two
+   * reasons. It is the honest input to `absencesFromEvents`, which is pure and
+   * unit-tested — a hand-built map here could not be. And it defers the
+   * judgement of *what counts* as an absence to one place instead of spreading
+   * it through the event switch.
+   *
+   * Held here rather than written straight to the career so that abandoning a
+   * match — quitting from the pause menu, which explicitly does not save —
+   * does not saddle the squad with a knock that never happened. The log is read
+   * once in `enterResult`, when the fixture itself is filed.
+   */
+  private matchEvents: SimEvent[] = [];
   private detailId: string | null = null;
   private seed = 0;
   /** Which Viber the 3D hero stage is presenting. */
@@ -273,7 +299,9 @@ export class Game {
    */
   private applyCareer(career: CareerState): void {
     this.career = career;
-    if (career.lineup.length === 5) {
+    // Any non-empty squad seeds the picker. It used to insist on exactly five,
+    // which would have silently discarded a saved squad the moment it grew.
+    if (career.lineup.length > 0) {
       this.selected = [...career.lineup];
       this.focusId = career.lineup[0];
     }
@@ -283,6 +311,19 @@ export class Game {
     // Honour the saved sound setting before a context is ever built, so a muted
     // career never makes a noise even for a frame.
     this.sound.setMuted(!career.settings.sound);
+  }
+
+  /**
+   * The five who actually take the pitch: the first five FIT members of the
+   * squad, in squad order.
+   *
+   * Filtering on fitness rather than assuming the first five are available is
+   * what makes an injury cost something. A manager who loses a starter does not
+   * get to field four and a ghost — the next fit player steps up, and it is the
+   * *squad* order that decides who.
+   */
+  private starters(): string[] {
+    return fitSquad(this.career).slice(0, SQUAD_SIZE);
   }
 
   /**
@@ -303,25 +344,48 @@ export class Game {
 
   /* ----------------------- club sections ----------------------- */
 
+  /**
+   * The absences that concern the SQUAD.
+   *
+   * An absence is recorded against the player, not the squad slot, so the
+   * career's map can hold entries for roster players the manager does not own —
+   * an injury does not heal because a player was dropped, and the picker shows
+   * such a player as un-signable. Screens that talk about "your side" want only
+   * the squad's share of that, which is what this narrows it to.
+   */
+  private squadAbsences(): Record<string, Absence> {
+    const out: Record<string, Absence> = {};
+    for (const id of this.career.lineup) {
+      const a = this.career.absences[id];
+      if (a) out[id] = a;
+    }
+    return out;
+  }
+
   private showLeague(): void {
     this.state = 'league';
     clear(this.uiRoot);
     // The CPU half of the season is simulated on demand rather than stored, so
     // the table is always complete and always matches the season seed.
+    const starters = this.starters();
     const results = completeResults(this.career.results, {
       seed: this.career.seed,
-      playerStrength: teamOverall(this.selected),
+      // The side that actually takes the pitch sets the strength, not the whole
+      // squad — a bench does not win you points.
+      playerStrength: teamOverall(starters),
     });
     renderLeague(this.uiRoot, {
       season: this.career.season,
       results,
-      lineup: this.selected,
+      lineup: starters,
+      out: this.squadAbsences(),
       tab: this.leagueTab,
       onTab: (t) => {
         this.leagueTab = t;
         this.showLeague();
       },
       onPlayNext: () => this.playNextFixture(),
+      onNewLeague: () => this.startNewLeague(),
       onNextSeason: () => {
         this.commitCareer(startNextSeason(this.career));
         this.applyCareer(this.career);
@@ -332,6 +396,17 @@ export class Game {
     this.presentInBand(this.focus(), '.league-table, .fixture-list', FRAMING.squad, {
       maxFill: 0.4,
     });
+  }
+
+  /**
+   * Opt into a new league: the table, the fixtures and the injury list start
+   * from nothing. The club and the squad stay — that is the difference between
+   * starting a new *league* and starting a new *club* (Settings → Erase career).
+   */
+  private startNewLeague(): void {
+    this.commitCareer(newLeague(this.career));
+    this.applyCareer(this.career);
+    this.showLeague();
   }
 
   /**
@@ -359,7 +434,12 @@ export class Game {
     this.state = 'squadview';
     clear(this.uiRoot);
     renderSquadView(this.uiRoot, {
-      lineup: this.selected,
+      // The five on the pitch are the first five FIT players, not the first five
+      // names — an injured starter is covered by whoever is next in line, and
+      // this screen has to show the side that would actually walk out.
+      lineup: this.starters(),
+      squad: this.career.lineup,
+      out: this.career.absences,
       // Changing the five is the first step of a match, not a side door into
       // one: it goes through the fixture so the opponent is the real one.
       onChange: () => this.playNextFixture(),
@@ -379,6 +459,8 @@ export class Game {
       filter: this.playersFilter,
       sort: this.playersSort,
       lineup: this.selected,
+      max: LEAGUE_SQUAD_MAX,
+      out: this.career.absences,
       onFilter: (f) => {
         this.playersFilter = f;
         this.showPlayers();
@@ -716,6 +798,8 @@ export class Game {
       selected: this.selected,
       focus: this.focus(),
       filter: this.filter,
+      max: LEAGUE_SQUAD_MAX,
+      out: this.career.absences,
       onCard: (id) => {
         this.detailId = id;
         this.nav('detail');
@@ -752,21 +836,29 @@ export class Game {
   }
 
   /**
-   * Rebuild the bench to cover the current five.
+   * Rebuild the bench to cover the current starting five.
    *
-   * Called from every path that can change the five. It has to be a rebuild and
+   * Called from every path that can change the squad. It has to be a rebuild and
    * not a patch: a Viber who has just been promoted to the starting lineup must
    * leave the bench, or the same player would be available to come on for
    * themselves.
+   *
+   * The pool is the club's own fit squad, NOT the whole roster — see
+   * `benchFromSquad`. A league side can only field players it has, and it is
+   * that limit which gives a 12-player squad any point.
    */
   private refreshBench(): void {
-    this.bench = autoBench(this.selected);
+    const starters = this.starters();
+    this.bench = benchFromSquad(fitSquad(this.career), starters);
   }
 
   private togglePick(id: string): void {
     if (this.selected.includes(id)) {
       this.selected = this.selected.filter((x) => x !== id);
-    } else if (this.selected.length < 5) {
+    } else if (!isAvailable(this.career, id)) {
+      // Injured or suspended: not selectable at all. The card says why.
+      return;
+    } else if (this.selected.length < LEAGUE_SQUAD_MAX) {
       this.selected = [...this.selected, id];
     }
     this.focusId = id;
@@ -787,7 +879,8 @@ export class Game {
     clear(this.uiRoot);
     renderViberDetail(this.uiRoot, v, {
       selected: this.selected.includes(id),
-      canAdd: this.selected.length < 5,
+      canAdd: this.selected.length < LEAGUE_SQUAD_MAX,
+      out: this.career.absences[id] ?? null,
       onToggle: () => this.togglePick(id),
       onClose: () => this.goBack(),
     });
@@ -840,12 +933,14 @@ export class Game {
     // The bench is rebuilt here too, so the opponent is drawn against the five
     // AND the bench actually carried into this match.
     this.refreshBench();
+    // The whole squad is excluded from the CPU's side, so no Viber ever lines up
+    // against the manager who signed them.
     this.opponent = autoOpponent(this.selected, this.seed, clubId, this.bench);
     clear(this.uiRoot);
     this.present(this.focus(), FRAMING.opponent);
     this.renderer.applyWeather(this.weather);
     renderOpponent(this.uiRoot, {
-      playerIds: this.selected,
+      playerIds: this.starters(),
       opponent: this.opponent,
       weather: this.weather,
       halfSeconds: this.halfSeconds,
@@ -861,41 +956,60 @@ export class Game {
     });
   }
 
-  /** A sensible default five: best available per role, with light variation. */
+  /**
+   * A sensible default squad: a balanced five first, then depth.
+   *
+   * Two rules make this safe to tap at any time.
+   *
+   * It PREFERS players the manager already has. Auto Pick fills the squad up to
+   * twelve, but it never releases anyone to do it — so on a full squad it only
+   * reorders, putting the best available five on the pitch. That matters
+   * because an absence is recorded against the player, not the squad slot: a
+   * tap that quietly dropped an injured player would look like a free cure for
+   * the very mechanic the twelve-man squad exists for.
+   *
+   * And it only ever picks players who are fit. Anyone unavailable is skipped
+   * outright, which also makes this the quickest way out of "three of my
+   * players are injured and I cannot field a five".
+   */
   private autoPick(): void {
-    const topOf = (role: string, n: number) =>
-      ROSTER.filter((v) => v.role === role)
-        .sort((a, b) => overallOf(b) - overallOf(a))
-        .slice(0, n);
-    const pool = [
-      ...topOf('GK', 2).slice(0, 1),
-      ...topOf('DEF', 3),
-      ...topOf('MID', 3),
-      ...topOf('FWD', 3),
-    ];
-    // Pick one GK + one DEF + two MID + one FWD, shuffled within the pool.
-    const shuffled = pool.sort(() => Math.random() - 0.5);
-    const ids: string[] = [];
-    const take = (role: string, count: number) => {
-      let taken = 0;
-      for (const v of shuffled) {
-        if (taken >= count) break;
-        if (v.role === role && !ids.includes(v.id)) {
-          ids.push(v.id);
-          taken++;
-        }
-      }
+    const keep = [...this.selected];
+    const fit = ROSTER.filter((v) => isAvailable(this.career, v.id));
+
+    /** The best `n` fit players in a line, squad members first. */
+    const pick = (role: string, n: number) => {
+      const pool = fit
+        .filter((v) => v.role === role)
+        .sort((a, b) => overallOf(b) - overallOf(a));
+      return [...pool.filter((v) => keep.includes(v.id)), ...pool.filter((v) => !keep.includes(v.id))].slice(0, n);
     };
-    take('GK', 1);
-    take('DEF', 1);
-    take('MID', 2);
-    take('FWD', 1);
-    // Backfill if the roster ever lacks a role.
-    for (const v of shuffled) {
-      if (ids.length >= 5) break;
-      if (!ids.includes(v.id)) ids.push(v.id);
+
+    const ids: string[] = [];
+    const add = (id?: string) => {
+      if (id && !ids.includes(id) && ids.length < LEAGUE_SQUAD_MAX) ids.push(id);
+    };
+
+    // The five who take the pitch, in the order the formation fills them, so
+    // the shape is always playable.
+    for (const v of [...pick('GK', 1), ...pick('DEF', 1), ...pick('MID', 2), ...pick('FWD', 1)]) add(v?.id);
+
+    // Then everyone the manager already has — including anyone who is out.
+    for (const id of keep) add(id);
+
+    // Then depth, line by line, so a knock to any starter has a like-for-like
+    // answer already in the squad.
+    for (const v of [
+      ...pick('DEF', 2).slice(1),
+      ...pick('MID', 3).slice(2),
+      ...pick('FWD', 2).slice(1),
+      ...pick('GK', 2).slice(1),
+    ]) {
+      add(v?.id);
     }
-    this.selected = ids.slice(0, 5);
+    // Backfill if the roster is ever short in a line.
+    for (const v of [...fit].sort((a, b) => overallOf(b) - overallOf(a))) add(v.id);
+
+    this.selected = ids.slice(0, LEAGUE_SQUAD_MAX);
     this.focusId = this.selected[0] ?? this.focusId;
   }
 
@@ -903,16 +1017,25 @@ export class Game {
 
   private startMatch(): void {
     if (!this.opponent) return;
+    // The first five fit players of the squad take the pitch; the bench covers
+    // them from what is left. Both are drawn only from the club's own squad.
+    const starters = this.starters();
+    const bench = this.bench.length
+      ? this.bench
+      : benchFromSquad(fitSquad(this.career), starters);
     this.world = createWorld({
       seed: this.seed,
-      homeIds: this.selected,
+      homeIds: starters,
       awayIds: this.opponent.ids,
       awayClubId: this.opponent.club.id,
       weather: this.weather,
       halfSeconds: this.halfSeconds,
-      benchIds: this.bench.length ? this.bench : autoBench(this.selected),
+      benchIds: bench,
     });
     this.halfTwoStarted = false;
+    // A new match starts with a clean slate; anything from the last one was
+    // either committed with its result or abandoned with the match.
+    this.matchEvents = [];
 
     /*
      * This runs inside the KICK OFF click handler, which makes it the one
@@ -1023,6 +1146,10 @@ export class Game {
     const w = this.world;
     if (!w) return;
     for (const ev of drainEvents(w)) {
+      // Logged before the switch, not inside it: `fulltime` files the match
+      // from `enterResult` in the same pass, and it must see the whole half —
+      // including a card shown in the very last tick before the whistle.
+      this.matchEvents.push(ev);
       switch (ev.type) {
         case 'kickoff':
           // Only the first kickoff of the second half is a "SECOND HALF" moment;
@@ -1103,6 +1230,34 @@ export class Game {
         case 'foul':
           // The restart banner that follows carries the message.
           break;
+        case 'card': {
+          /*
+           * The referee's notebook — the BANNER half of it.
+           *
+           * Nothing is written to the career here. The card is already in
+           * `matchEvents`, and `absencesFromEvents` reads the bans off it when
+           * the fixture is filed. Keeping the two apart is what lets the
+           * conversion be unit-tested: a rule buried in this switch can only be
+           * exercised by playing a match in a real browser.
+           *
+           * The banner is shown for either side, because a red card is the
+           * moment the match changes shape and the player should see who went
+           * off. A yellow carries no ban in this game — there is no
+           * accumulation rule, and inventing one would punish a player for
+           * something the referee's own notebook never mentions.
+           */
+          const p = w.players.find((x) => x.id === ev.player);
+          if (!p) break;
+          if (ev.card === 'red') this.hud?.showBanner(`RED CARD · ${p.name}`, 'special');
+          else this.hud?.showBanner(`YELLOW · ${p.name}`);
+          break;
+        }
+        case 'injury': {
+          const p = w.players.find((x) => x.id === ev.player);
+          if (!p) break;
+          this.hud?.showBanner(`INJURY · ${p.name}`, 'special');
+          break;
+        }
         case 'halftime':
           this.enterHalftime();
           break;
@@ -1175,29 +1330,68 @@ export class Game {
     // File the result against the fixture. Scores are stored from the HOME
     // club's point of view, and the player is not always the home side.
     let note = '';
+    let next = this.career;
     if (this.fixture) {
       const playerGoals = w.teams[0].score;
       const cpuGoals = w.teams[1].score;
       const home = isHomeFixture(this.fixture);
-      this.commitCareer(
-        withResult(
-          this.career,
-          this.fixture.id,
-          home ? playerGoals : cpuGoals,
-          home ? cpuGoals : playerGoals,
-        ),
+      next = withResult(
+        next,
+        this.fixture.id,
+        home ? playerGoals : cpuGoals,
+        home ? cpuGoals : playerGoals,
       );
       this.fixture = null;
 
       const table = buildTable(
-        completeResults(this.career.results, {
-          seed: this.career.seed,
-          playerStrength: teamOverall(this.selected),
+        completeResults(next.results, {
+          seed: next.seed,
+          playerStrength: teamOverall(this.starters()),
         }),
       );
       const pos = playerPosition(table);
-      if (pos) note = `${ordinal(pos)} in the league · ${playerRow(table)?.points ?? 0} points`;
+      if (pos) {
+        const points = playerRow(table)?.points ?? 0;
+        // "1 points" is the sort of thing that makes a screen feel unfinished.
+        note = `${ordinal(pos)} in the league · ${points} point${points === 1 ? '' : 's'}`;
+      }
     }
+
+    /*
+     * Move the calendar on, then file what this match cost.
+     *
+     * The order matters and is not interchangeable. `tickAbsences` serves the
+     * ban or layoff for the fixture just played, so it has to run BEFORE the
+     * new absences are added — otherwise a player hurt in this match would
+     * immediately lose a fixture of their own recovery and come back a game
+     * early. Committed in a single write so the two can never disagree on disk.
+     *
+     * `viberOf` reads the world's own player table. A card the sim cannot map
+     * back to a Viber is dropped by the helper rather than guessed at, so a
+     * mismatch degrades to "no ban" — never to the wrong player banned.
+     */
+    const picked = absencesFromEvents(
+      (id) => w.players.find((p) => p.id === id)?.viber,
+      this.matchEvents,
+    );
+    next = withAbsences(tickAbsences(next), picked);
+    this.commitCareer(next);
+    // New absences change who is fit, and the bench is drawn from the fit
+    // squad. Rebuilding here means the next match never offers a substitute who
+    // is already ruled out.
+    this.refreshBench();
+
+    // What the player needs to read off the full-time screen: who this match
+    // took out, and for how long. Names, because the ids mean nothing here.
+    const absences = Object.entries(picked)
+      .filter(([id, a]) => a.matches > 0 && this.career.lineup.includes(id))
+      .map(([id, a]) => ({
+        name: ROSTER_BY_ID[id]?.name ?? id,
+        kind: a.kind === 'suspension' ? ('suspension' as const) : ('injury' as const),
+        matches: a.matches,
+      }))
+      .sort((a, b) => b.matches - a.matches);
+    this.matchEvents = [];
 
     renderResult(
       this.overlay,
@@ -1212,7 +1406,7 @@ export class Game {
         this.hud = null;
         this.nav('squadview', false);
       },
-      { againLabel: 'Back to the League', changeLabel: 'Squad', note },
+      { againLabel: 'Back to the League', changeLabel: 'Squad', note, absences },
     );
   }
 

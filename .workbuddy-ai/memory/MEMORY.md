@@ -72,8 +72,16 @@ shipped as ONE self-contained `Viber-League.html`.
   landscape card rail clips vertically (`overflow-x: auto` forces `overflow-y` to
   clip) and the selected card's `translateY` was being cut — assert rail-vs-card
   rects explicitly instead.
-- Headless Chrome runs WebGL in software: a match is ~0.2× real time and one
-  frame can be ~700 ms. Poll in harnesses; never sleep a fixed amount.
+- **NEVER wait on wall clock for a match.** Headless Chrome has no compositor:
+  rAF runs at ~5fps, the app clamps a frame to 50ms and takes ≤6 ticks, so the
+  sim advances at **~0.25× realtime** (measured with `tools/cdp/probe-rate.mjs`;
+  a 90s half needs ~6 min of wall clock). `flow-club.mjs` therefore steps the
+  real world directly via a bundled `TestSim` injected with
+  `Page.addScriptToEvaluateOnNewDocument`, and answers the penalty and half-time
+  panels the app raises. Waiting instead made the run fail *more* the busier the
+  machine was — 15 cascading failures from one under-sized budget.
+- `window.game` is exposed by `src/main.ts` for console debugging, and
+  `?autostart` / `?seed=<n>` jump straight into a pinned match. Use them.
 - `npm run shots` reports failure even when the harness passes — the sandbox
   denies Chrome's own RLZ/GoogleUpdater file deletions. The verdict is the
   `=== N failed check(s) ===` line and `report.json`'s `fails`.
@@ -83,3 +91,22 @@ shipped as ONE self-contained `Viber-League.html`.
 - **CDP probes must run SERIALLY** — two Chrome instances race port 9333.
 - The sandbox's Bash `grep` silently returned no matches on files/patterns the
   Grep tool found fine. Prefer the Grep tool.
+
+## Layout budgets (added 2026-10-13)
+
+- **The landscape card rail is a fixed budget and everything above it spends it.**
+  A 390px-tall viewport leaves the rail ~166px for a ~150px card. The squad strip
+  and the filter chips are the only things above it, and every pixel they take
+  comes straight off the cards — a 3-row strip cut the rating plates in half and
+  sliced the role bars. The strip is therefore TWO rows in landscape (legend on
+  its own line via `flex: 0 0 100%`, both groups sharing the next), and
+  `flow-club.mjs` asserts the selected card against the rail's rect.
+- **A `.selected` rule must not drop the panel layer.** `.viber-card2.selected`
+  set `background: <glow>, rgba(223,249,2,0.1)` with nothing opaque under it, so
+  the chosen card was 90% transparent and the 3D stage showed through it — the
+  hero model sitting on top of the player's name. Only ever visible on the
+  SELECTED card. Any state that restyles a card keeps `var(--panel-2)` at the
+  bottom of the background stack.
+- **The reserve row wraps; the starting five never does.** `.strip-group.start`
+  is always one row of five (that row IS the "first five start" rule); the bench
+  wraps at a 64px floor so a name is never truncated to "CHIM…".

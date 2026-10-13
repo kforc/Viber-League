@@ -85,6 +85,37 @@ function attrRow(label: string, value: number): HTMLElement {
 const RING_R = 20;
 const RING_C = 2 * Math.PI * RING_R;
 
+/* ------------------------------------------------------------------ */
+/* Availability — how the screens are told a player cannot be picked    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A player who is out, as the UI needs to read it.
+ *
+ * Deliberately a local shape rather than a re-export of the career's
+ * `Absence`: `ui/` is presentation and does not reach into `app/`. The two are
+ * structurally identical, so the game passes its own record straight through.
+ */
+export interface OutInfo {
+  kind: 'injury' | 'suspension';
+  /** League fixtures still to be missed. */
+  matches: number;
+}
+export type OutMap = Record<string, OutInfo>;
+
+/** The word on the badge, and the full sentence for a screen reader. */
+function outLabel(info: OutInfo): { short: string; long: string } {
+  if (info.kind === 'suspension') {
+    const n = info.matches;
+    return {
+      short: `RED ${n}`,
+      long: `Suspended for ${n} more ${n === 1 ? 'match' : 'matches'}`,
+    };
+  }
+  const n = info.matches;
+  return { short: `OUT ${n}`, long: `Injured — out for ${n} more ${n === 1 ? 'match' : 'matches'}` };
+}
+
 /** The 0 / 5 game-HUD counter. Animates up from empty on mount. */
 function progressRing(count: number, total = 5): HTMLElement {
   const wrap = el('div', 'pick-ring');
@@ -122,6 +153,8 @@ function cardSlot(
     index: number;
     order: number;
     canAdd: boolean;
+    /** Set when the player is injured or suspended and cannot be picked. */
+    out?: OutInfo | null;
     onOpen: () => void;
     onToggle: () => void;
   },
@@ -131,6 +164,7 @@ function cardSlot(
 
   const card = el('button', `viber-card2 role-${v.role}`);
   if (opts.selected) card.classList.add('selected');
+  if (opts.out) card.classList.add('is-out');
 
   // Band 1 — the header. Rating on the left; the right corner is left free for
   // the add control (a *sibling* element, because nesting a button inside this
@@ -142,9 +176,20 @@ function cardSlot(
   if (opts.selected) top.append(el('span', 'card-pick', String(opts.index + 1)));
   card.append(top);
 
-  // Band 2 — the art window.
+  // Band 2 — the art window, which also carries the unavailability badge. The
+  // badge is words ("OUT 2"), not just a colour, so it survives both a
+  // colour-blind player and a monochrome screen.
   const art = el('div', 'card-art');
   art.append(viberAvatar(v, 1.15));
+  if (opts.out) {
+    const info = opts.out;
+    const label = outLabel(info);
+    const badge = el('div', `card-out ${info.kind}`);
+    badge.append(el('span', 'card-out-tag', label.short));
+    badge.setAttribute('aria-hidden', 'true');
+    art.append(badge);
+    card.setAttribute('aria-label', `${v.name}. ${label.long}.`);
+  }
   card.append(art);
 
   // Band 3 — who they are.
@@ -161,9 +206,14 @@ function cardSlot(
   if (opts.selected) card.append(el('span', 'card-shine'));
   on(card, 'click', opts.onOpen);
 
+  // Removing an unavailable player is still allowed — dropping them is the one
+  // way to free the slot they are occupying — but ADDING one is not, so the
+  // control is disabled rather than merely hidden. A disabled `+` that is still
+  // visible is what tells the player the card is out of reach.
   const add = el('button', `card-add${opts.selected ? ' on' : ''}`, opts.selected ? '−' : '+');
   add.setAttribute('aria-label', opts.selected ? `Remove ${v.name}` : `Add ${v.name} to squad`);
-  if (!opts.selected && !opts.canAdd) add.disabled = true;
+  if (!opts.selected && (!opts.canAdd || opts.out)) add.disabled = true;
+  if (!opts.selected && opts.out) add.classList.add('blocked');
   on(add, 'click', (ev) => {
     ev.stopPropagation();
     opts.onToggle();
@@ -842,6 +892,10 @@ export interface SquadSelectOpts {
   selected: string[];
   focus: ViberCharacter;
   filter: RoleFilter;
+  /** Squad cap. Five of these start; the rest are the season's depth. */
+  max: number;
+  /** Players who cannot be picked, and why. */
+  out: OutMap;
   onCard: (id: string) => void;
   onToggle: (id: string) => void;
   onFilter: (f: RoleFilter) => void;
@@ -853,16 +907,120 @@ export interface SquadSelectOpts {
 
 const FILTERS: RoleFilter[] = ['ALL', 'GK', 'DEF', 'MID', 'FWD'];
 
+/**
+ * The squad, as slots.
+ *
+ * The whole rule of league mode lives in this one strip: five of the squad take
+ * the pitch and the rest are cover for the injuries and bans that will come.
+ * Reading it off a row of slots is much faster than counting which cards happen
+ * to be picked, and it is the only place the rule is stated rather than implied.
+ *
+ * The two groups are the TRUTH, not the squad order. An injured player is not
+ * in the starting five — the next fit player is — so the injured one appears in
+ * the reserves wearing a badge, which is where a manager would look for them.
+ * The number on each slot is the player's place in the squad (the same number
+ * the card carries), so it stays stable as players come and go around them.
+ *
+ * A filled slot is a button that opens that player's card, so the strip is a
+ * way *into* the squad, not just a picture of it.
+ */
+function squadStrip(
+  selected: string[],
+  out: OutMap,
+  max: number,
+  onCard: (id: string) => void,
+): HTMLElement {
+  const strip = el('div', 'squad-strip');
+
+  /** One slot. `squadIndex` is the player's place in the squad, or -1 for an empty shirt. */
+  const slot = (id: string | null, squadIndex: number): HTMLElement => {
+    const v = id ? ROSTER_BY_ID[id] : undefined;
+    if (!id || !v) {
+      const empty = el('div', 'strip-slot empty');
+      empty.append(el('span', 'strip-n', squadIndex >= 0 ? String(squadIndex + 1) : ''));
+      empty.setAttribute('aria-hidden', 'true');
+      return empty;
+    }
+
+    const info = out[id];
+    const label = info ? outLabel(info) : null;
+    const b = el('button', `strip-slot filled role-${v.role}${info ? ` is-out ${info.kind}` : ''}`);
+    const top = el('div', 'strip-top');
+    top.append(el('span', 'strip-n', String(squadIndex + 1)));
+    if (info && label) top.append(el('span', `strip-tag ${info.kind}`, label.short));
+    b.append(top, el('span', 'strip-name', v.name));
+    b.setAttribute(
+      'aria-label',
+      label
+        ? `Squad slot ${squadIndex + 1}: ${v.name}. ${label.long}. Open their card.`
+        : `Squad slot ${squadIndex + 1}: ${v.name}. Open their card.`,
+    );
+    on(b, 'click', () => onCard(v.id));
+    return b;
+  };
+
+  const entries = (ids: string[], padTo: number): Array<{ id: string | null; idx: number }> => {
+    const rows = ids.map((id) => ({ id: id as string | null, idx: selected.indexOf(id) }));
+    while (rows.length < padTo) rows.push({ id: null, idx: -1 });
+    return rows;
+  };
+
+  // Who actually plays: the first five FIT players, in squad order. Everyone
+  // else is a reserve — including anyone who is out, because they are not on
+  // the pitch either way.
+  const starters = Math.min(5, max);
+  const xi = selected.filter((id) => !out[id]).slice(0, starters);
+  const bench = selected.filter((id) => !xi.includes(id));
+
+  const group = (label: string, hint: string, cls: string, rows: Array<{ id: string | null; idx: number }>) => {
+    const box = el('div', `strip-group ${cls}`);
+    const head = el('div', 'strip-head');
+    head.append(el('span', 'strip-label', label), el('span', 'strip-hint', hint));
+    const slots = el('div', 'strip-slots');
+    for (const r of rows) slots.append(slot(r.id, r.idx));
+    box.append(head, slots);
+    return box;
+  };
+
+  // The XI always shows five slots even when the squad cannot fill them: an
+  // empty shirt is the clearest way to say "a side is short". The reserve row
+  // is never narrower than a full squad would leave it, but it grows if
+  // injuries push more players out of the five.
+  const reserveCount = Math.max(max - starters, bench.length);
+
+  /*
+   * A one-line legend, shown only in landscape.
+   *
+   * Landscape is 390px tall and the card rail needs almost all of it, so the
+   * strip collapses to a single row of numbered chips there and the two group
+   * headings have nowhere to live. This says the same thing in one line, which
+   * costs ~14px instead of ~40px.
+   */
+  const legend = el('div', 'strip-legend');
+  legend.append(
+    el('span', 'strip-legend-xi', `${starters} on the pitch`),
+    el('span', 'strip-legend-sep', '·'),
+    el('span', 'strip-legend-sub', `${reserveCount} in reserve`),
+  );
+
+  strip.append(
+    legend,
+    group('Starting five', 'on the pitch', 'start', entries(xi, starters)),
+    group(`${reserveCount} in reserve`, 'cover for injuries & bans', 'bench', entries(bench, reserveCount)),
+  );
+  return strip;
+}
+
 export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): void {
   clear(root);
   const wrap = el('div', 'screen squad-screen hero-select');
 
   // ---- header + progress ring ----
   const head = screenHead(
-    'Choose Your Five',
-    'Tap a Viber to inspect their qualities, then add them to your squad.',
+    'Choose Your Squad',
+    `Tap a Viber to inspect their qualities, then add them. The first five start; you may name up to ${opts.max}.`,
     opts.onBack,
-    progressRing(opts.selected.length),
+    progressRing(opts.selected.length, opts.max),
   );
 
   // ---- hero stage: the 3D Viber shows through this band ----
@@ -894,7 +1052,7 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   // ---- the card grid ----
   const grid = el('div', 'viber-grid');
   const shown = ROSTER.filter((v) => opts.filter === 'ALL' || v.role === opts.filter);
-  const canAdd = opts.selected.length < 5;
+  const canAdd = opts.selected.length < opts.max;
   shown.forEach((v, i) => {
     const idx = opts.selected.indexOf(v.id);
     grid.append(
@@ -903,6 +1061,7 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
         index: idx,
         order: i,
         canAdd,
+        out: opts.out[v.id] ?? null,
         onOpen: () => opts.onCard(v.id),
         onToggle: () => opts.onToggle(v.id),
       }),
@@ -915,8 +1074,13 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   on(auto, 'click', opts.onAuto);
   const clearBtn = el('button', 'ghost-btn', 'Clear');
   on(clearBtn, 'click', opts.onClear);
-  const next = el('button', 'primary-btn', 'Continue');
-  next.disabled = opts.selected.length !== 5;
+  // Five AVAILABLE players is the bar, not twelve: a manager with an injured
+  // squad should still be able to take the pitch with the bodies they have, and
+  // the depth is a choice. Counting the squad rather than the fit would let a
+  // player walk on with four available and a dead end at kick-off.
+  const short = 5 - opts.selected.filter((id) => !opts.out[id]).length;
+  const next = el('button', 'primary-btn', short > 0 ? `Pick ${short} more` : 'Continue');
+  next.disabled = short > 0;
   if (next.disabled) next.classList.add('disabled');
   on(next, 'click', opts.onNext);
   actions.append(auto, clearBtn, next);
@@ -929,7 +1093,7 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   // column beside the hero, so the cards get the full height of the viewport
   // instead of the ~90px a stacked layout leaves them.
   const body = el('div', 'hero-body');
-  body.append(chips, grid);
+  body.append(squadStrip(opts.selected, opts.out, opts.max, opts.onCard), chips, grid);
 
   wrap.append(head, stage, body, footer);
   root.append(wrap);
@@ -942,7 +1106,14 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
 export function renderViberDetail(
   root: HTMLElement,
   v: ViberCharacter,
-  opts: { selected: boolean; canAdd: boolean; onToggle: () => void; onClose: () => void },
+  opts: {
+    selected: boolean;
+    canAdd: boolean;
+    /** Set when the player is injured or suspended and cannot be picked. */
+    out?: OutInfo | null;
+    onToggle: () => void;
+    onClose: () => void;
+  },
 ): void {
   clear(root);
   const wrap = el('div', 'screen overlay-screen');
@@ -961,6 +1132,16 @@ export function renderViberDetail(
   );
   head.append(idBox, el('div', 'sheet-ovr', String(overallOf(v))));
   sheet.append(head);
+
+  // Availability is stated once, high up, before the player reads anything else
+  // — a card that looks addable and is not is the whole problem this solves.
+  if (opts.out) {
+    const info = opts.out;
+    const label = outLabel(info);
+    const banner = el('div', `sheet-out ${info.kind}`);
+    banner.append(el('span', 'sheet-out-tag', label.short), el('span', 'sheet-out-text', label.long));
+    sheet.append(banner);
+  }
 
   const attrs = el('div', 'attr-list');
   attrs.append(
@@ -982,7 +1163,12 @@ export function renderViberDetail(
   sheet.append(special);
 
   const btn = el('button', 'primary-btn', opts.selected ? 'Remove from Squad' : 'Add to Squad');
-  if (!opts.selected && !opts.canAdd) {
+  if (!opts.selected && opts.out) {
+    // They can still be removed — dropping them frees the slot — but not added.
+    btn.disabled = true;
+    btn.classList.add('disabled');
+    btn.textContent = opts.out.kind === 'suspension' ? 'Suspended' : 'Injured';
+  } else if (!opts.selected && !opts.canAdd) {
     btn.disabled = true;
     btn.classList.add('disabled');
     btn.textContent = 'Squad Full';
@@ -1759,7 +1945,15 @@ export function renderSubs(
     head.append(back);
     panel.append(head);
 
-    const onPitch = world.players.filter((p) => p.team === 0);
+    /*
+     * Only the players still ON the pitch. A sent-off or injured player is
+     * parked off it rather than removed from `world.players` (see the `off`
+     * field), so filtering on the team alone would list a dismissed player as
+     * available to be substituted — which is both wrong and confusing when the
+     * side is a man down and the list should be one shorter.
+     */
+    const onPitch = world.players.filter((p) => p.team === 0 && !p.off);
+    const offPitch = world.players.filter((p) => p.team === 0 && p.off);
     const bench = world.bench[0];
     const total = world.subsMade[0] + bench.length;
     panel.append(
@@ -1771,6 +1965,16 @@ export function renderSubs(
           : 'No substitutes left.',
       ),
     );
+
+    // Who is missing, and why. Without this the "On the pitch" column would
+    // simply be short with nothing to explain it.
+    if (offPitch.length) {
+      const gone = el('p', 'subs-gone');
+      gone.textContent = offPitch
+        .map((p) => `${p.name} (${p.off === 'red' ? 'sent off' : 'injured'})`)
+        .join(' · ');
+      panel.append(gone);
+    }
 
     const body = el('div', 'subs-body');
 
@@ -1819,12 +2023,25 @@ export function renderSubs(
 /* 9. Full-time                                                        */
 /* ------------------------------------------------------------------ */
 
+export interface ResultOpts {
+  againLabel?: string;
+  changeLabel?: string;
+  note?: string;
+  /**
+   * Players who came out of this match unavailable, and how long for. Reported
+   * separately from the career's full absence list so the screen can say what
+   * *this* match cost — which is the thing the player needs to know before they
+   * name a side for the next one.
+   */
+  absences?: Array<{ name: string; kind: 'injury' | 'suspension'; matches: number }>;
+}
+
 export function renderResult(
   root: HTMLElement,
   world: World,
   onPlayAgain: () => void,
   onChangeSquad: () => void,
-  opts?: { againLabel?: string; changeLabel?: string; note?: string },
+  opts?: ResultOpts,
 ): void {
   clear(root);
   const [home, away] = world.teams;
@@ -1840,6 +2057,33 @@ export function renderResult(
 
   // Where this leaves the season, when the match came from the league.
   if (opts?.note) panel.append(el('p', 'result-note', opts.note));
+
+  // Who this match cost. Placed above the stats rather than below the buttons:
+  // a manager who has just lost two players needs that before they read the
+  // possession figures, and long before they tap "Back to the League".
+  if (opts?.absences?.length) {
+    const box = el('div', 'out-list result-out');
+    box.append(
+      el(
+        'div',
+        'out-list-title',
+        opts.absences.length === 1 ? 'Out of the next match' : 'Out of the next matches',
+      ),
+    );
+    const rows = el('div', 'out-rows');
+    for (const a of opts.absences) {
+      const tag = a.kind === 'suspension' ? `RED ${a.matches}` : `OUT ${a.matches}`;
+      const r = el('div', `out-row ${a.kind}`);
+      r.append(
+        el('span', 'out-name', a.name),
+        el('span', 'out-why', a.kind === 'suspension' ? 'Suspended' : 'Injured'),
+        el('span', 'out-tag', tag),
+      );
+      rows.append(r);
+    }
+    box.append(rows);
+    panel.append(box);
+  }
 
   const stats = el('div', 'stats-table');
   const possTotal = Math.max(1, world.stats.possession[0] + world.stats.possession[1]);
@@ -1974,10 +2218,14 @@ export interface LeagueOpts {
   results: ResultMap;
   /** The five that would take the pitch right now, for the squad rating. */
   lineup: string[];
+  /** Players who cannot be picked, and why — the season's casualty list. */
+  out: OutMap;
   tab: LeagueTab;
   onTab: (t: LeagueTab) => void;
   onPlayNext: () => void;
   onNextSeason: () => void;
+  /** Start the league again from zero, keeping the club and the squad. */
+  onNewLeague: () => void;
   onBack: () => void;
 }
 
@@ -2009,10 +2257,54 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
 
   // What the player's five are actually worth, and what that buys them.
   const ovr = teamOverall(opts.lineup);
+  const short = 5 - opts.lineup.length;
   const note = el('p', 'section-note');
-  note.textContent = row
-    ? `Your five rate OVR ${ovr}. ${row.played} played, ${row.points} points, ${row.gd >= 0 ? '+' : ''}${row.gd} goal difference.`
-    : `Your five rate OVR ${ovr}. Pick a squad to get started.`;
+  if (short > 0) {
+    // The one thing that actually blocks a match. Saying so here is the
+    // difference between a dead button and an instruction — and with injuries
+    // in play it is a state the player will meet, not a hypothetical.
+    note.textContent = `Only ${opts.lineup.length} fit for the next match — a side needs five. Add players, or wait for the injured to recover.`;
+  } else {
+    note.textContent = row
+      ? `Your five rate OVR ${ovr}. ${row.played} played, ${row.points} point${row.points === 1 ? '' : 's'}, ${row.gd >= 0 ? '+' : ''}${row.gd} goal difference.`
+      : `Your five rate OVR ${ovr}. Pick a squad to get started.`;
+  }
+
+  /*
+   * The treatment room, named, and placed ABOVE the table.
+   *
+   * Injuries are the reason the squad is twelve rather than five, so who is
+   * missing is the first thing a manager wants off this screen — and the table
+   * is long enough that anything under it is a scroll away. It goes directly
+   * under the tabs, where it is read before the standings rather than hunted
+   * for after them.
+   */
+  const outs = Object.entries(opts.out);
+  if (outs.length) {
+    const box = el('div', 'out-list');
+    box.append(el('div', 'out-list-title', outs.length === 1 ? 'Out of the side' : `${outs.length} out of the side`));
+    const rows = el('div', 'out-rows');
+    // Longest absence first: the player scanning this wants to know who is
+    // nearly back and who is not.
+    outs.sort((a, b) => b[1].matches - a[1].matches);
+    for (const [id, info] of outs) {
+      const v = ROSTER_BY_ID[id];
+      if (!v) continue;
+      const label = outLabel(info);
+      const r = el('div', `out-row ${info.kind}`);
+      r.append(
+        el('span', 'out-name', v.name),
+        el('span', 'out-role', v.role),
+        el('span', 'out-why', info.kind === 'suspension' ? 'Suspended' : 'Injured'),
+        el('span', 'out-tag', label.short),
+      );
+      rows.append(r);
+    }
+    box.append(rows);
+    wrap.append(head, tabs, box, body, note);
+  } else {
+    wrap.append(head, tabs, body, note);
+  }
 
   const actions = el('div', 'flow-actions');
   if (done) {
@@ -2021,13 +2313,37 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
     actions.append(next);
   } else {
     const next = el('button', 'primary-btn', 'Play Next Match');
+    // Five fit players are the bar; the rest of the squad is depth, not a
+    // requirement. A side that cannot field five is the only real block.
     next.disabled = opts.lineup.length !== 5;
     if (next.disabled) next.classList.add('disabled');
     on(next, 'click', opts.onPlayNext);
     actions.append(next);
   }
 
-  wrap.append(head, tabs, body, note, actions);
+  /*
+   * "New league" — the opt-in.
+   *
+   * Two taps, like Erase Career in Settings, and for the same reason: there is
+   * no undo. What it does NOT do is throw away the club: the squad the manager
+   * built and the crest they chose stay, and only the season, the table, the
+   * fixtures and the injury list go back to nothing. Erasing the *club* is a
+   * different, rarer action and lives in Settings where it belongs.
+   */
+  const newLeague = el('button', 'ghost-btn danger', 'New league');
+  let armed = false;
+  on(newLeague, 'click', () => {
+    if (!armed) {
+      armed = true;
+      newLeague.textContent = played > 0 ? 'New league — erases this season, tap again' : 'New league — tap again';
+      newLeague.classList.add('armed');
+      return;
+    }
+    opts.onNewLeague();
+  });
+  actions.append(newLeague);
+
+  wrap.append(actions);
   root.append(wrap);
 }
 
@@ -2121,7 +2437,16 @@ export function ordinal(n: number): string {
 /* ------------------------------------------------------------------ */
 
 export interface SquadViewOpts {
+  /**
+   * The five that will actually take the pitch, in formation order. Already
+   * filtered for availability — an injured starter is replaced by the next fit
+   * player, so this is not simply the first five names on the team sheet.
+   */
   lineup: string[];
+  /** The whole squad, in pick order, so the reserves can be listed. */
+  squad: string[];
+  /** Players who cannot be picked, and why. */
+  out: OutMap;
   onChange: () => void;
   onOpen: (id: string) => void;
   onBack: () => void;
@@ -2196,12 +2521,74 @@ export function renderSquadView(root: HTMLElement, opts: SquadViewOpts): void {
       ? `${PLAYER_CLUB.name} · Diamond formation · average rating ${ovr}.`
       : `${slotsFilled} of 5 places filled — matches need a full five.`;
 
+  /*
+   * The rest of the squad, and the treatment room.
+   *
+   * The pitch shows the five who play; this shows the seven who make a
+   * twelve-man squad worth having. Reserves come first because that is the
+   * order a manager thinks in — who is next in line — and anyone unavailable is
+   * marked in the same words the cards use, so the two screens agree.
+   */
+  const reserves = opts.squad.filter((id) => !opts.lineup.includes(id));
+  const extras: HTMLElement[] = [];
+
+  if (reserves.length) {
+    const box = el('div', 'reserve-list');
+    box.append(el('div', 'reserve-title', `${reserves.length} in reserve`));
+    const rows = el('div', 'reserve-rows');
+    for (const id of reserves) {
+      const v = ROSTER_BY_ID[id];
+      if (!v) continue;
+      const info = opts.out[id];
+      const r = el('button', `reserve-row role-${v.role}${info ? ' is-out' : ''}`);
+      r.append(
+        el('span', 'ovr-badge', String(overallOf(v))),
+        el('span', 'reserve-name', v.name),
+        el('span', 'reserve-role', v.role),
+        info
+          ? el('span', `reserve-tag ${info.kind}`, outLabel(info).short)
+          : el('span', 'reserve-tag fit', 'Fit'),
+      );
+      r.setAttribute(
+        'aria-label',
+        info ? `${v.name}, ${outLabel(info).long}` : `${v.name}, available`,
+      );
+      on(r, 'click', () => opts.onOpen(v.id));
+      rows.append(r);
+    }
+    box.append(rows);
+    extras.push(box);
+  }
+
+  const outIds = opts.squad.filter((id) => opts.out[id]);
+  if (outIds.length) {
+    const box = el('div', 'out-list');
+    box.append(el('div', 'out-list-title', 'Treatment room'));
+    const rows = el('div', 'out-rows');
+    for (const id of outIds) {
+      const v = ROSTER_BY_ID[id];
+      const info = opts.out[id];
+      if (!v || !info) continue;
+      const label = outLabel(info);
+      const r = el('div', `out-row ${info.kind}`);
+      r.append(
+        el('span', 'out-name', v.name),
+        el('span', 'out-role', v.role),
+        el('span', 'out-why', info.kind === 'suspension' ? 'Suspended' : 'Injured'),
+        el('span', 'out-tag', label.short),
+      );
+      rows.append(r);
+    }
+    box.append(rows);
+    extras.push(box);
+  }
+
   const actions = el('div', 'flow-actions');
   const change = el('button', 'primary-btn', slotsFilled === 5 ? 'Change Squad' : 'Pick Your Five');
   on(change, 'click', opts.onChange);
   actions.append(change);
 
-  wrap.append(head, pitch, balance, warn, actions);
+  wrap.append(head, pitch, balance, warn, ...extras, actions);
   root.append(wrap);
 }
 
@@ -2214,8 +2601,12 @@ export type PlayerSort = 'rating' | 'name' | 'role';
 export interface PlayersOpts {
   filter: RoleFilter;
   sort: PlayerSort;
-  /** Ids already in the saved five, so the cards can show it. */
+  /** Ids already in the saved squad, so the cards can show it. */
   lineup: string[];
+  /** Squad cap. */
+  max: number;
+  /** Players who cannot be picked, and why. */
+  out: OutMap;
   onFilter: (f: RoleFilter) => void;
   onSort: (s: PlayerSort) => void;
   onCard: (id: string) => void;
@@ -2229,9 +2620,9 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
 
   const head = screenHead(
     'Players',
-    `All ${ROSTER.length} Vibers. Tap one to read their card, or add them to your five.`,
+    `All ${ROSTER.length} Vibers. Tap one to read their card, or add them to your squad.`,
     opts.onBack,
-    progressRing(opts.lineup.length),
+    progressRing(opts.lineup.length, opts.max),
   );
 
   const chips = el('div', 'chip-row');
@@ -2264,7 +2655,7 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
   });
 
   const grid = el('div', 'viber-grid');
-  const canAdd = opts.lineup.length < 5;
+  const canAdd = opts.lineup.length < opts.max;
   shown.forEach((v, i) => {
     const idx = opts.lineup.indexOf(v.id);
     grid.append(
@@ -2273,6 +2664,7 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
         index: idx,
         order: i,
         canAdd,
+        out: opts.out[v.id] ?? null,
         onOpen: () => opts.onCard(v.id),
         onToggle: () => opts.onToggle(v.id),
       }),

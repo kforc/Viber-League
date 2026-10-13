@@ -4,7 +4,7 @@
 export * from './types';
 export * from './constants';
 export { v2, dist, clamp, len, norm, sub, add, scale } from './core/math';
-export { makeRng } from './core/rng';
+export { makeRng, type Rng } from './core/rng';
 export { createWorld, resetPositions } from './world';
 export { step, drainEvents, queue, flushCommands, substitute, currentMinute } from './engine';
 export { opponentGoalPos, ownGoalPos } from './ai';
@@ -12,6 +12,7 @@ export {
   beginSetPiece,
   awardFromOutOfPlay,
   awardFoul,
+  sendOff,
   setPieceTarget,
   runSetPiece,
   inOwnPenaltyArea,
@@ -27,6 +28,7 @@ export {
   buildLineup,
   autoOpponent,
   autoBench,
+  benchFromSquad,
   BENCH_SIZE,
   SLOT_ROLES,
   type ViberCharacter,

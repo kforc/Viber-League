@@ -207,7 +207,7 @@ function tryKeepIn(w: World, out: { axis: 'x' | 'y'; side: 1 | -1 }): boolean {
   let best: Player | null = null;
   let bd = Infinity;
   for (const p of w.players) {
-    if (p.team !== entitled || p.isGK) continue;
+    if (p.team !== entitled || p.isGK || p.off) continue;
     const d = dist(p.pos, b.pos);
     if (d < bd) {
       bd = d;
@@ -540,9 +540,10 @@ export function step(w: World, dt: number): void {
     return;
   }
 
-  // AI + movement always run so players settle during pauses.
+  // AI + movement always run so players settle during pauses. Anyone who has
+  // left the pitch is parked and skipped — see `Player.off`.
   updateAI(w, dt);
-  for (const p of w.players) integratePlayer(p, w, dt);
+  for (const p of w.players) if (!p.off) integratePlayer(p, w, dt);
   resolvePlayerCollisions(w);
 
   // Ball
@@ -585,6 +586,7 @@ export function step(w: World, dt: number): void {
         let best: Player | null = null;
         let bd = Infinity;
         for (const p of w.players) {
+          if (p.off) continue;
           const maxH = p.isGK ? GOAL_H : 0.75;
           if (b.h > maxH) continue;
           const reach = p.isGK ? KEEPER_CONTROL_RADIUS : CONTROL_RADIUS;

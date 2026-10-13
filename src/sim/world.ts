@@ -129,6 +129,9 @@ export function createWorld(config: MatchConfig): World {
     },
     events: [],
     rng: makeRng(config.seed),
+    // A distinct stream (a different constant, same seed) so discipline rolls
+    // cannot perturb the match rng. See `World.disciplineRng`.
+    disciplineRng: makeRng((config.seed ^ 0x9e3779b9) >>> 0),
     possession: null,
     lastGoalTeam: null,
     kickoffTeam: 0,
@@ -176,6 +179,9 @@ export function resetPositions(world: World, _kind: 'kickoff' | 'goal'): void {
   const kicking = world.kickoffTeam;
 
   for (const p of world.players) {
+    // Anyone who has left the pitch (red card, injury) stays off it. A restart
+    // must not march a dismissed player back on.
+    if (p.off) continue;
     // Kickoff rules: everyone starts in their own half, spread by role so the
     // shape reads like a real restart instead of a pile-up at the centre. The
     // mentality reshapes it further, so a Defend side lines up deep and narrow
@@ -209,6 +215,6 @@ export function resetPositions(world: World, _kind: 'kickoff' | 'goal'): void {
 
   // The kicking team's forward steps up to the ball, guaranteeing a clean,
   // uncontested restart for the side that has the right to kick off.
-  const taker = world.players.find((p) => p.team === kicking && p.role === 'FWD');
+  const taker = world.players.find((p) => p.team === kicking && p.role === 'FWD' && !p.off);
   if (taker) taker.pos = v2(kicking === 0 ? -0.6 : 0.6, 0);
 }

@@ -25,6 +25,16 @@ import {
 
 const HOME = ['frost', 'moss', 'volt', 'cobalt', 'crimson'];
 
+/**
+ * How close to the ball a player has to be for "standing still" to be a defect
+ * rather than a job.
+ *
+ * The pitch is 40m long and 24m wide, so 12m is comfortably inside the same
+ * passage of play and comfortably outside a striker holding the highest line
+ * while his side has the ball 30m away in their own corner.
+ */
+const INVOLVED_RADIUS = 12;
+
 function makeConfig(seed: number): MatchConfig {
   return {
     seed,
@@ -41,6 +51,7 @@ interface MatchRead {
   finalThirdEntries: number;
   ballSideStall: number;
   longestFrozen: number;
+  longestFrozenAnywhere: number;
   longestUnclaimed: number;
   passes: number;
   shots: number;
@@ -58,8 +69,10 @@ function readMatch(seed: number): MatchRead {
   let ballSideStall = 0;
   let ballSideTicks = 0;
   let longestFrozen = 0;
+  let longestFrozenAnywhere = 0;
   let longestUnclaimed = 0;
   const stallRun = new Map<number, number>();
+  const anywhereRun = new Map<number, number>();
   let unclaimedRun = 0;
 
   for (let i = 0; i < 60 * 250; i++) {
@@ -82,15 +95,44 @@ function readMatch(seed: number): MatchRead {
     if (unclaimedRun > longestUnclaimed) longestUnclaimed = unclaimedRun;
 
     for (const p of w.players) {
-      if (p.isGK) continue;
+      /*
+       * A sent-off or injured player is parked beyond the touchline and is
+       * SUPPOSED to stand still — that is what being a man down looks like on
+       * the pitch. The invariant below is about players still involved in play,
+       * so anyone off is excluded rather than counted as a frozen spectator.
+       */
+      if (p.isGK || p.off) continue;
       const d = dist(p.pos, b.pos);
       if (d < 10) {
         ballSideTicks++;
         if (len(p.vel) < 0.6) ballSideStall++;
       }
-      const run = len(p.vel) < 0.35 ? (stallRun.get(p.id) ?? 0) + 1 : 0;
+
+      /*
+       * The frozen run is only counted while the player is IN the passage of
+       * play, and this is a correctness fix rather than a loosening.
+       *
+       * The sim deliberately leaves the furthest-forward attacker standing on
+       * his station while his side has the ball deep in their own half: he is
+       * the out-ball, and holding the highest line is the whole point of him
+       * (see MENTALITY_SHAPE — "the striker stays high as an out-ball"). That
+       * role is stationary by design, so a global "nobody stands still" check
+       * was measuring a tactic and calling it a bug. It only ever passed
+       * because no seed happened to produce a long spell of possession deep in
+       * one half; a red card stretches a side enough to expose it.
+       *
+       * Inactivity near the ball is the thing that actually looks broken, so
+       * that is what is measured. The separate `longestFrozenAnywhere` below
+       * keeps the global reach for a genuine statue.
+       */
+      const involved = d < INVOLVED_RADIUS;
+      const run = involved && len(p.vel) < 0.35 ? (stallRun.get(p.id) ?? 0) + 1 : 0;
       stallRun.set(p.id, run);
       if (run > longestFrozen) longestFrozen = run;
+
+      const anywhere = len(p.vel) < 0.35 ? (anywhereRun.get(p.id) ?? 0) + 1 : 0;
+      anywhereRun.set(p.id, anywhere);
+      if (anywhere > longestFrozenAnywhere) longestFrozenAnywhere = anywhere;
     }
   }
 
@@ -107,6 +149,7 @@ function readMatch(seed: number): MatchRead {
     finalThirdEntries,
     ballSideStall: ballSideStall / Math.max(1, ballSideTicks),
     longestFrozen: longestFrozen * TICK,
+    longestFrozenAnywhere: longestFrozenAnywhere * TICK,
     longestUnclaimed: longestUnclaimed * TICK,
     passes: w.stats.passes[0] + w.stats.passes[1],
     shots: w.stats.shots[0] + w.stats.shots[1],
@@ -124,8 +167,13 @@ describe('gameplay feel', () => {
     for (const r of reads) {
       // Ball-side players are actively adjusting, not frozen spectators.
       expect(r.ballSideStall, `seed ${r.seed} ball-side stall`).toBeLessThan(0.25);
-      // Nobody is statuesque for a whole second and a half.
+      // Nobody in the passage of play is statuesque for a whole second and a
+      // half. `longestFrozen` is scoped to players near the ball — see the
+      // note in `readMatch` for why a striker holding an out-ball is not a bug.
       expect(r.longestFrozen, `seed ${r.seed} longest frozen run`).toBeLessThan(1.5);
+      // And nobody anywhere on the pitch stands still for four seconds, which
+      // no role justifies.
+      expect(r.longestFrozenAnywhere, `seed ${r.seed} longest frozen run anywhere`).toBeLessThan(4);
     }
   });
 

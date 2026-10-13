@@ -108,7 +108,7 @@ function bestPassOption(w: World, p: Player): { mate: Player; score: number } | 
   let best: { mate: Player; score: number } | null = null;
 
   for (const t of w.players) {
-    if (t.team !== p.team || t.id === p.id || t.isGK) continue;
+    if (t.team !== p.team || t.id === p.id || t.isGK || t.off) continue;
     const toMate = sub(t.pos, p.pos);
     const d = len(toMate);
     // Nothing beyond a hopeful long ball.
@@ -203,7 +203,7 @@ function crossTarget(w: World, team: TeamId): Vec2 {
   let best: Player | null = null;
   let bestCost = Infinity;
   for (const p of w.players) {
-    if (p.team !== team || p.isGK) continue;
+    if (p.team !== team || p.isGK || p.off) continue;
     const cost = Math.abs(p.pos.y) * 1.4 + Math.abs(goalLine - dir * 5 - p.pos.x);
     if (cost < bestCost) {
       bestCost = cost;
@@ -318,7 +318,8 @@ function think(w: World, p: Player): void {
         // is a penalty; anywhere else it is a free kick.
         const inBox = inOwnPenaltyArea(p);
         if (w.rng.range(0, 1) < (inBox ? FOUL_CHANCE_BOX : FOUL_CHANCE_OPEN)) {
-          awardFoul(w, p, inBox);
+          // The carrier is the victim: they are the one a bad challenge can hurt.
+          awardFoul(w, p, inBox, owner);
         }
       }
     }
@@ -369,7 +370,7 @@ function keepInAssignment(w: World): KeepInErrand | null {
   let best: Player | null = null;
   let bd = Infinity;
   for (const q of w.players) {
-    if (q.team !== entitled || q.isGK) continue;
+    if (q.team !== entitled || q.isGK || q.off) continue;
     const d = dist(q.pos, exit.at);
     if (d < bd) {
       bd = d;
@@ -602,6 +603,9 @@ export function updateAI(w: World, dt: number): void {
   const keepIn = keepInAssignment(w);
 
   for (const p of w.players) {
+    // A player who has left the pitch (red card, injury) stands off it and does
+    // nothing: no thinking, no steering. Their side is a player short.
+    if (p.off) continue;
     if (p.cooldown > 0) p.cooldown -= dt;
     p.think -= dt;
     if (p.think <= 0) {

@@ -224,6 +224,10 @@ export function resolvePlayerCollisions(w: World): void {
     for (let j = i + 1; j < ps.length; j++) {
       const a = ps[i];
       const b = ps[j];
+      // A player who has left the pitch is standing off it; they neither push
+      // nor get pushed, and two of them parked in the same spot must not shove
+      // each other around the touchline.
+      if (a.off || b.off) continue;
       const dx = b.pos.x - a.pos.x;
       const dy = b.pos.y - a.pos.y;
       const d = Math.hypot(dx, dy);

@@ -10,6 +10,8 @@
 // rather than a vibe.
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const port = Number(process.env.CDP_PORT || 9333);
 const url = process.argv[2];
@@ -243,6 +245,35 @@ await send('Page.addScriptToEvaluateOnNewDocument', {
   })();`,
 });
 
+/*
+ * THE SIM, SO THE MATCH CAN BE DRIVEN RATHER THAN WAITED ON.
+ *
+ * Headless Chrome has no compositor. `requestAnimationFrame` here runs at ~5fps
+ * and the app clamps a frame to 50ms and takes at most six ticks, so a live
+ * match advances at roughly **0.25x real time** — measured, not guessed, with
+ * tools/cdp/probe-rate.mjs. A 90-second half is therefore about six minutes of
+ * wall clock, and the old fixed 150x2s budgets ran out mid-match: half-time
+ * never arrived, full time never arrived, and fifteen checks downstream failed
+ * against a match that had been playing perfectly the whole time. Worse, the
+ * slower the machine, the more of the run failed, so a green run said more
+ * about the load than about the game.
+ *
+ * So the match is stepped directly, exactly as probe-penalty.mjs does — through
+ * `TestSim.step` on the app's OWN world object, so it is the real simulation
+ * and not a second one. The app's own loop still drains the events on its next
+ * frame, which is what renders the panels the checks below look for.
+ *
+ * Injected on every new document so it survives the reloads further down.
+ */
+const sim = (await build({
+  entryPoints: [fileURLToPath(new URL('../../src/sim/index.ts', import.meta.url))],
+  format: 'iife',
+  globalName: 'TestSim',
+  bundle: true,
+  write: false,
+})).outputFiles[0].text;
+await send('Page.addScriptToEvaluateOnNewDocument', { source: `${sim}\n;0` });
+
 // Seed a club so the run starts at the menu, and a career with an EMPTY squad
 // so the "pick five first" gate is exercised for real rather than assumed.
 await send('Page.navigate', { url });
@@ -335,6 +366,36 @@ const gateDisabled = await evalJs(
      return b ? b.disabled : 'none'; })()`);
 check('Play Next Match is gated until five are picked', gateDisabled === true,
   'disabled=' + gateDisabled);
+
+/*
+ * The league opt-in. Starting a league from scratch is destructive — there is
+ * no undo — so it is two taps, and this walks both of them. On a career with
+ * nothing played yet the second tap is a no-op in terms of results, which is
+ * exactly why it is safe to press it here.
+ */
+check('the League screen offers a new league', await exists('.league-screen .ghost-btn.danger'));
+check('the new-league button is not armed on arrival',
+  (await text('.league-screen'))?.includes('tap again') === false);
+const armNew = await clickText('New league', '.ghost-btn');
+check('the new-league control is present to tap', armNew === 'ok', armNew);
+await sleep(400);
+check('the first tap arms rather than restarts',
+  (await text('.league-screen'))?.includes('tap again') === true,
+  await text('.league-screen .ghost-btn.danger'));
+check('the armed new-league button is styled as armed',
+  await exists('.league-screen .ghost-btn.danger.armed'));
+await shot('02b-league-new-armed');
+
+await clickText('New league', '.ghost-btn');
+await sleep(700);
+check('the second tap starts the league again from nothing',
+  (await text('.league-screen .screen-sub'))?.includes('Season 1') === true,
+  await text('.league-screen .screen-sub'));
+check('the restarted league has nothing played',
+  (await text('.league-screen .screen-sub'))?.includes('0 of 12 played') === true,
+  await text('.league-screen .screen-sub'));
+check('a fresh league puts the button back to unarmed',
+  (await text('.league-screen'))?.includes('tap again') === false);
 
 await clickText('Fixtures', '.chip');
 await sleep(500);
@@ -576,10 +637,59 @@ await clickText('Play Next Match', '.primary-btn');
 await sleep(800);
 check('the league fixture goes through the squad picker', await exists('.hero-select'));
 
+/*
+ * The squad rule. Twelve may be named, five of them play, and the strip is the
+ * only place that is stated rather than implied — so it is worth asserting the
+ * split itself, not just that some slots exist.
+ */
+check('the picker states the squad rule as a strip of slots',
+  (await count('.squad-strip .strip-slot')) === 12,
+  'slots=' + (await count('.squad-strip .strip-slot')));
+check('the strip splits the five who play from the seven in reserve',
+  (await count('.strip-group.start .strip-slot')) === 5 &&
+    (await count('.strip-group.bench .strip-slot')) === 7,
+  `start=${await count('.strip-group.start .strip-slot')} bench=${await count('.strip-group.bench .strip-slot')}`);
+check('the strip names both halves',
+  (await text('.strip-group.start .strip-label')) === 'Starting five' &&
+    (await text('.strip-group.bench .strip-label')) === '7 in reserve',
+  `${await text('.strip-group.start .strip-label')} / ${await text('.strip-group.bench .strip-label')}`);
+check('the strip starts empty', (await count('.strip-slot.filled')) === 0);
+check('the picker says the first five start',
+  (await text('.screen-sub'))?.includes('first five start') === true,
+  await text('.screen-sub'));
+
 await clickText('Auto', 'button');
 await sleep(700);
 const picked = await evalJs(`document.querySelectorAll('.viber-card2.selected').length`);
-check('the auto pick selects five', picked === 5, 'selected=' + picked);
+check('the auto pick names a full twelve-man squad', picked === 12, 'selected=' + picked);
+check('every slot in the strip fills in', (await count('.strip-slot.filled')) === 12,
+  'filled=' + (await count('.strip-slot.filled')));
+check('the strip names every player', (await count('.strip-slot .strip-name')) === 12);
+check('the counter reads out of twelve',
+  (await text('.pick-ring .ring-label'))?.includes('/12') === true,
+  await text('.pick-ring .ring-label'));
+// The number is what carries "this player is picked" for a colour-blind player,
+// so it has to actually be there and match the slot in the strip.
+const pickNums = await evalJs(`(() => {
+  const nums = [...document.querySelectorAll('.viber-card2.selected .card-pick')]
+    .map((e) => e.textContent.trim());
+  const strip = [...document.querySelectorAll('.strip-slot.filled .strip-n')]
+    .map((e) => e.textContent.trim());
+  return { nums, inStrip: nums.every((n) => strip.includes(n)) };
+})()`);
+check('every picked card is numbered', pickNums?.nums?.length === 12,
+  'nums=' + JSON.stringify(pickNums?.nums));
+check('the card numbers match the squad slots in the strip', pickNums?.inStrip === true,
+  JSON.stringify(pickNums));
+
+// A filled slot is a way into the squad, not just a readout.
+const openedFromStrip = await click('.strip-slot.filled');
+check('a filled slot opens that player', openedFromStrip === 'ok', openedFromStrip);
+await sleep(600);
+check('the slot opened a player card', await exists('.sheet'));
+await click('.back-btn');
+await sleep(600);
+check('closing the card returns to the picker', await exists('.hero-select'));
 
 /*
  * A picked card lifts out of the row (a transform), and a transform does not
@@ -592,9 +702,18 @@ const pickedFit = await evalJs(`(() => {
   const card = document.querySelector('.card-slot .viber-card2.selected');
   if (!rail || !card) return null;
   const r = rail.getBoundingClientRect(), c = card.getBoundingClientRect();
+  const cs = getComputedStyle(rail);
+  const slot = card.parentElement.getBoundingClientRect();
   return {
     over: Math.round(Math.max(r.top - c.top, c.bottom - r.bottom)),
-    clips: getComputedStyle(rail).overflowY === 'hidden',
+    clips: cs.overflowY === 'hidden',
+    // The numbers the verdict is made of, so a failure explains itself instead
+    // of just reporting a pixel count.
+    rail: { top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height) },
+    card: { top: Math.round(c.top), bottom: Math.round(c.bottom), h: Math.round(c.height) },
+    slot: { top: Math.round(slot.top), bottom: Math.round(slot.bottom), h: Math.round(slot.height) },
+    pad: cs.paddingTop + '/' + cs.paddingBottom,
+    transform: getComputedStyle(card).transform,
   };
 })()`);
 check('a picked card is not clipped by the rail either',
@@ -720,14 +839,73 @@ await shot('15-match', 1500);
 
 const clockAt = async () => text('.clock');
 
-// Half time arrives after one half; the game waits for a mentality. Measured at
-// ~19s for a 1-second half, so 150 x 2s is a very wide margin.
-console.log('\nwaiting for half-time...');
+/*
+ * Advance the match toward a phase, answering anything that stops it.
+ *
+ * The world pauses for exactly two things mid-match: a penalty (the human picks
+ * a direction) and half-time (the human picks a mentality). Neither was ever
+ * answered by this harness — a penalty would have hung it outright, and only
+ * luck kept one from being awarded in a run. Answering them here closes that
+ * hole and is what makes the driver safe to loop.
+ *
+ * Returns the world's phase when it stopped, so the caller can tell "arrived"
+ * from "gave up".
+ */
+const runMatchTo = async (target, label) => {
+  // A 90-second half is 5400 ticks; 4x that is room for a whole match of
+  // stoppages without the guard ever being the thing that ends the loop.
+  const cap = 60 * 60 * 4;
+  for (let round = 0; round < 200; round++) {
+    const r = await evalJs(`(() => {
+      const w = window.game.world;
+      let guard = 0;
+      while (w.phase !== ${JSON.stringify(target)} && !w.paused && guard++ < ${cap}) {
+        TestSim.step(w, TestSim.TICK);
+      }
+      return { phase: w.phase, paused: w.paused, guard, clock: w.clock, half: w.half };
+    })()`);
+    if (r.phase === target) return r;
+    if (!r.paused) {
+      console.log(`   ...${label}: guard exhausted at ${r.phase} (clock ${r.clock.toFixed(1)})`);
+      return r;
+    }
+    /*
+     * Paused. Wait for the panel to appear — the app renders it on its next
+     * animation frame, which is up to a few hundred ms away at 5fps.
+     */
+    let kind = null;
+    for (let i = 0; i < 40 && !kind; i++) {
+      if (await exists('.penalty-panel')) kind = 'penalty';
+      else if (await exists('.overlay-screen .choice-btn')) kind = 'choice';
+      else await sleep(250);
+    }
+    if (kind === 'penalty') {
+      console.log(`   ...${label}: penalty at ${r.clock.toFixed(1)}s — choosing a direction`);
+      await click('.dive-btn');
+    } else if (kind === 'choice') {
+      console.log(`   ...${label}: decision panel at ${r.clock.toFixed(1)}s — taking Balanced`);
+      await clickText('Balanced', '.choice-btn');
+    } else {
+      console.log(`   ...${label}: world paused at ${r.phase} with no panel to answer`);
+      return r;
+    }
+    await sleep(400);
+  }
+  return { phase: null };
+};
+
+// Half time arrives after one half, and the game waits for a mentality.
+console.log('\ndriving the first half...');
 let ht = false;
-for (let i = 0; i < 150; i++) {
-  await sleep(2000);
-  if (await exists('.overlay-screen .choice-btn')) { ht = true; break; }
-  if (i % 5 === 0) console.log(`   ...clock=${await clockAt()}`);
+for (let i = 0; i < 30 && !ht; i++) {
+  const r = await runMatchTo('halftime', 'first half');
+  // The world reaches half-time a frame or two before the app has rendered the
+  // mentality panel that is the thing being asserted, so wait for the panel.
+  for (let k = 0; k < 20 && !ht; k++) {
+    if (await exists('.overlay-screen .choice-btn')) ht = true;
+    else await sleep(250);
+  }
+  if (r.phase === null) break;
 }
 check('half-time pauses the match for a decision', ht);
 if (ht) {
@@ -736,15 +914,10 @@ if (ht) {
     (await count('.overlay-screen .choice-btn')) === 4,
     'choices=' + (await count('.overlay-screen .choice-btn')));
   await clickText('Balanced', '.choice-btn');
-  /*
-   * Poll rather than sleep a fixed amount. Software WebGL renders the match at
-   * roughly a fifth of real time, so a single frame can be most of a second
-   * away; a fixed 1.2s wait sat right on that boundary and failed whenever the
-   * renderer happened to be mid-frame when the button was tapped.
-   */
+  // The panel closes and the second half starts on the app's next frame or two.
   let resumed = false;
   for (let i = 0; i < 20; i++) {
-    await sleep(1000);
+    await sleep(250);
     if ((await text('.half')) === '2nd Half') { resumed = true; break; }
   }
   check('choosing a mentality closes the half-time panel',
@@ -753,14 +926,18 @@ if (ht) {
     'half=' + (await text('.half')));
 }
 
-console.log('waiting for full time...');
+console.log('\ndriving the second half...');
 let ft = false;
-for (let i = 0; i < 150; i++) {
-  await sleep(2000);
-  if (await exists('.stats-table')) { ft = true; break; }
-  if (i % 5 === 0) console.log(`   ...clock=${await clockAt()}`);
+for (let i = 0; i < 30 && !ft; i++) {
+  await runMatchTo('fulltime', 'second half');
+  // The result panel is rendered by the app when it drains the fulltime event,
+  // which is a frame or two behind the phase change.
+  for (let k = 0; k < 20 && !ft; k++) {
+    if (await exists('.stats-table')) { ft = true; break; }
+    await sleep(250);
+  }
 }
-check('the match reaches full time', ft);
+check('the match reaches full time', ft, 'clock=' + (await clockAt()));
 await shot('17-result', 1500);
 
 /*
@@ -831,6 +1008,141 @@ check('the stored result survived the reload',
   (await text('.lt-you .lt-num')) === '1',
   'played=' + (await text('.lt-you .lt-num')));
 await shot('21-league-after-reload');
+
+// -------------------------------------------- 9b. injuries, bans and depth
+/*
+ * The point of a twelve-man squad, end to end.
+ *
+ * Whether a match injures anyone is seed-dependent, so the absence is written
+ * straight into storage instead: a check that only fires on some seeds is not a
+ * check. What is being proved is the whole chain — a stored absence comes back
+ * as a player who is listed as out, is excluded from the five, has a replacement
+ * step up in their place, and cannot be added to the squad again.
+ */
+const injuredId = await evalJs(`(() => {
+  const raw = localStorage.getItem('viber-league:career:v1');
+  if (!raw) return null;
+  const c = JSON.parse(raw);
+  if (!c.lineup || !c.lineup.length) return null;
+  const id = c.lineup[0];
+  c.absences = { [id]: { kind: 'injury', matches: 2 } };
+  localStorage.setItem('viber-league:career:v1', JSON.stringify(c));
+  return id;
+})()`);
+check('there was a squad member to injure', typeof injuredId === 'string' && injuredId.length > 0,
+  'id=' + injuredId);
+
+await send('Page.navigate', { url });
+await sleep(8500);
+await freeze();
+await click('.menu-opt', 0);
+await sleep(800);
+check('the league screen lists who is out', await exists('.league-screen .out-list'));
+check('the casualty list names one player',
+  (await count('.league-screen .out-list .out-row')) === 1,
+  'rows=' + (await count('.league-screen .out-list .out-row')));
+check('the casualty list says how long they are out for',
+  (await text('.league-screen .out-tag')) === 'OUT 2',
+  await text('.league-screen .out-tag'));
+check('the casualty list says what is wrong',
+  (await text('.league-screen .out-why')) === 'Injured',
+  await text('.league-screen .out-why'));
+await shot('21b-league-injury');
+
+await clickText('Play Next Match', '.primary-btn');
+await sleep(900);
+check('the picker still opens with an injured player in the squad', await exists('.hero-select'));
+
+const outCard = await evalJs(`(() => {
+  const card = document.querySelector('.viber-card2.is-out');
+  if (!card) return null;
+  const add = card.closest('.card-slot')?.querySelector('.card-add');
+  return {
+    tag: card.querySelector('.card-out')?.textContent.trim() ?? null,
+    addDisabled: add ? add.disabled : null,
+    label: card.getAttribute('aria-label'),
+  };
+})()`);
+check('the injured card is badged', outCard?.tag === 'OUT 2', JSON.stringify(outCard));
+check('the card says why, for a screen reader',
+  typeof outCard?.label === 'string' && outCard.label.includes('Injured'), JSON.stringify(outCard));
+check('an injured player can still be dropped from the squad',
+  outCard?.addDisabled === false, JSON.stringify(outCard));
+
+const outSlot = await evalJs(`(() => {
+  const slot = document.querySelector('.strip-slot.filled.is-out');
+  if (!slot) return null;
+  return {
+    inStart: !!slot.closest('.strip-group.start'),
+    inBench: !!slot.closest('.strip-group.bench'),
+    tag: slot.querySelector('.strip-tag')?.textContent.trim() ?? null,
+  };
+})()`);
+check('the injured player is shown in the reserves, not the five',
+  outSlot?.inBench === true && outSlot?.inStart === false, JSON.stringify(outSlot));
+check('the injured slot carries the same badge', outSlot?.tag === 'OUT 2', JSON.stringify(outSlot));
+check('a fit player steps up into the starting five',
+  (await count('.strip-group.start .strip-slot.filled')) === 5,
+  'filled=' + (await count('.strip-group.start .strip-slot.filled')));
+check('the five that take the pitch are all fit',
+  (await count('.strip-group.start .strip-slot.is-out')) === 0);
+
+/*
+ * An out chip is WIDER than a plain one — it carries "OUT 2" as well as its
+ * number — and it does not shrink. So the one thing that can push the strip
+ * past its column is an injury, which is exactly the state the plain picker
+ * never reaches. Measure every chip against the strip itself rather than
+ * trusting the screenshot, and keep the screenshot too: this is the state the
+ * player sees for a whole match, and it was never captured before.
+ */
+const stripFit = await evalJs(`(() => {
+  const strip = document.querySelector('.hero-select .squad-strip');
+  const slots = [...document.querySelectorAll('.hero-select .squad-strip .strip-slot')];
+  if (!strip || !slots.length) return null;
+  const s = strip.getBoundingClientRect();
+  let over = -Infinity;
+  for (const el of slots) {
+    const r = el.getBoundingClientRect();
+    over = Math.max(over, s.left - r.left, r.right - s.right);
+  }
+  const last = slots[slots.length - 1].getBoundingClientRect();
+  return {
+    over: Math.round(over),
+    slots: slots.length,
+    strip: Math.round(s.left) + '..' + Math.round(s.right),
+    lastRight: Math.round(last.right),
+  };
+})()`);
+check('every squad slot fits inside the strip, badge and all',
+  stripFit != null && stripFit.over <= 1, JSON.stringify(stripFit));
+await shot('21c-picker-injury');
+
+/*
+ * And the loophole that would make all of the above pointless: if AUTO PICK
+ * quietly released the injured player, one tap would erase the injury — the
+ * squad would be refilled from the roster and the absence would be gone with
+ * them. It must keep what the manager has and only top the squad up.
+ */
+await clickText('Auto', 'button');
+await sleep(700);
+check('auto pick does not drop an injured player', await exists('.viber-card2.is-out'));
+check('auto pick leaves the squad at twelve',
+  (await count('.viber-card2.selected')) === 12,
+  'selected=' + (await count('.viber-card2.selected')));
+const stillOut = await evalJs(`(() => {
+  const c = JSON.parse(localStorage.getItem('viber-league:career:v1') || '{}');
+  return {
+    inSquad: (c.lineup || []).includes(${JSON.stringify(injuredId)}),
+    absences: Object.keys(c.absences || {}),
+  };
+})()`);
+check('the injured player is still in the squad after auto pick',
+  stillOut?.inSquad === true, JSON.stringify(stillOut));
+check('the injury is still on the books after auto pick',
+  stillOut?.absences?.length === 1, JSON.stringify(stillOut));
+check('a fit player still steps up into the five',
+  (await count('.strip-group.start .strip-slot.filled')) === 5);
+await shot('21d-picker-after-autopick');
 
 // ------------------------------------------------------- 10. muted = silent
 /*

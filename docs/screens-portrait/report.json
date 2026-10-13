@@ -16,6 +16,13 @@
    "spill": 0
   },
   {
+   "name": "02b-league-new-armed",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
    "name": "03-league-fixtures",
    "screen": "screen.squad-screen.league-screen",
    "clipped": 0,
@@ -82,7 +89,7 @@
    "name": "11-squad-picked",
    "screen": "screen.squad-screen.hero-select",
    "clipped": 0,
-   "scrolls": 7,
+   "scrolls": 14,
    "spill": 8
   },
   {
@@ -156,8 +163,29 @@
    "spill": 0
   },
   {
+   "name": "21b-league-injury",
+   "screen": "screen.squad-screen.league-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "21c-picker-injury",
+   "screen": "screen.squad-screen.hero-select",
+   "clipped": 0,
+   "scrolls": 14,
+   "spill": 8
+  },
+  {
+   "name": "21d-picker-after-autopick",
+   "screen": "screen.squad-screen.hero-select",
+   "clipped": 0,
+   "scrolls": 14,
+   "spill": 8
+  },
+  {
    "name": "22-muted-match",
-   "screen": "(none)",
+   "screen": "screen.overlay-screen",
    "clipped": 0,
    "scrolls": 0,
    "spill": 0

@@ -1057,6 +1057,49 @@ export function autoBench(lineupIds: string[], size = BENCH_SIZE): string[] {
   return out;
 }
 
+/**
+ * The bench for a league match, drawn from the club's OWN squad.
+ *
+ * This is the difference between a squad and a roster. `autoBench` above reaches
+ * into the whole roster — it answers "who could cover this five?" — which is
+ * fine for a one-off friendly but wrong for a league: a club can only field
+ * players it has signed, and it is exactly that limit that makes an injury or a
+ * ban bite. Here the pool is the squad's non-starters, and if the squad is thin
+ * the bench is short.
+ *
+ * Cover is still one per outfield line, best first, so a manager who loses a
+ * defender has a defender to bring on.
+ */
+export function benchFromSquad(
+  squadIds: string[],
+  starterIds: string[],
+  size = BENCH_SIZE,
+): string[] {
+  const taken = new Set(starterIds);
+  const pool = squadIds.map((id) => ROSTER_BY_ID[id]).filter(Boolean) as ViberCharacter[];
+  const out: string[] = [];
+
+  for (const role of ['DEF', 'MID', 'FWD'] as ViberRole[]) {
+    if (out.length >= size) break;
+    const best = pool
+      .filter((v) => v.role === role && !taken.has(v.id))
+      .sort((a, b) => overallOf(b) - overallOf(a))[0];
+    if (best) {
+      taken.add(best.id);
+      out.push(best.id);
+    }
+  }
+  // Backfill from whatever is left of the squad, so a squad with no cover in
+  // one line still fills the bench it is allowed.
+  for (const v of [...pool].sort((a, b) => overallOf(b) - overallOf(a))) {
+    if (out.length >= size) break;
+    if (taken.has(v.id)) continue;
+    taken.add(v.id);
+    out.push(v.id);
+  }
+  return out;
+}
+
 const ROLE_ORDER: Role[] = ['GK', 'DEF', 'MID', 'FWD'];
 
 /** How badly a Viber's natural role fits a formation slot (0 = perfect). */

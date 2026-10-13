@@ -147,6 +147,38 @@ export const FOUL_CHANCE_BOX = 0.34;
 /** Chance a failed tackle elsewhere is given as a foul. */
 export const FOUL_CHANCE_OPEN = 0.12;
 
+/*
+ * DISCIPLINE.
+ *
+ * Every roll below is drawn from `world.disciplineRng`, never the match rng.
+ * That separation is deliberate: the match rng decides every pass, shot and
+ * tackle, so taking discipline rolls from it would shift every later value and
+ * quietly change matches that have nothing to do with cards. On its own stream,
+ * these numbers can be tuned without moving a single existing result.
+ */
+/** Share of fouls bad enough to be carded at all. */
+export const CARD_CHANCE = 0.26;
+/** Share of those cards that are red rather than yellow. */
+export const RED_CARD_SHARE = 0.12;
+/** Share of fouls that leave the victim unable to continue. */
+export const INJURY_CHANCE_FOUL = 0.06;
+/** How far beyond the touchline a player who has left the pitch is parked. */
+export const OFF_PITCH_MARGIN = 3.5;
+
+/*
+ * How long a player is out for, in LEAGUE FIXTURES, as an inclusive range.
+ *
+ * Rolled here, on `disciplineRng`, rather than by the career layer — the same
+ * reason the card rolls live here. The duration is decided by the seed, so a
+ * replay of the same season produces the same injury list, and the career only
+ * has to *record* what the match reported. "Moderate" severity, as chosen:
+ * a knock costs up to three games, a sending-off up to two.
+ */
+/** Fixtures missed through injury. */
+export const INJURY_MATCHES: readonly [number, number] = [1, 3];
+/** Fixtures missed through a red card. */
+export const SUSPENSION_MATCHES: readonly [number, number] = [1, 2];
+
 /** Distance from the byline inside which a wide player crosses instead of shooting. */
 export const CROSS_RANGE = 7.5;
 /** Distance from the byline inside which a player attacks the corner flag. */

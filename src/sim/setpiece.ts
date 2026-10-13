@@ -9,10 +9,14 @@
 import { clamp, dist, norm, scale, sub, v2, type Vec2 } from './core/math';
 import {
   BALL_RADIUS,
+  CARD_CHANCE,
   CORNER_SPEED,
   FREE_KICK_SPEED,
   GOAL_HALF_W,
   GOAL_KICK_SPEED,
+  INJURY_CHANCE_FOUL,
+  INJURY_MATCHES,
+  OFF_PITCH_MARGIN,
   PASS_SPEED_BASE,
   PENALTY_AREA_DEPTH,
   PENALTY_AREA_HALF_W,
@@ -20,8 +24,10 @@ import {
   PENALTY_SPEED,
   PITCH_HALF_L,
   PITCH_HALF_W,
+  RED_CARD_SHARE,
   SETPIECE_PAUSE,
   SHOOT_RANGE,
+  SUSPENSION_MATCHES,
 } from './constants';
 import { weatherMods } from './weather';
 import type { DiveDirection, Player, SetPiece, SetPieceKind, TeamId, World } from './types';
@@ -97,7 +103,8 @@ export function isSetPiecePhase(w: World): boolean {
 /* ------------------------------------------------------------------ */
 
 function pickTaker(w: World, kind: SetPieceKind, team: TeamId, pos: Vec2): Player | null {
-  const pool = w.players.filter((p) => p.team === team);
+  // Nobody who has left the pitch can stand over a restart.
+  const pool = w.players.filter((p) => p.team === team && !p.off);
   if (!pool.length) return null;
 
   if (kind === 'goalkick') {
@@ -213,13 +220,82 @@ export function awardFromOutOfPlay(w: World, out: OutOfPlay): void {
   beginSetPiece(w, 'goalkick', defending, v2(out.side * (PITCH_HALF_L - 5.5), 0), 1);
 }
 
-/** A foul has been given. Inside the offender's own box it is a penalty. */
-export function awardFoul(w: World, offender: Player, penalty: boolean): void {
+/**
+ * Take a player off the pitch for the rest of the match.
+ *
+ * They are parked beyond the touchline and skipped by the AI (see `Player.off`),
+ * so their side plays a player short — which is the entire consequence of a red
+ * card. Anything still referencing them is released first: a dismissed player
+ * cannot still be carrying the ball or standing over a restart.
+ */
+export function sendOff(w: World, p: Player, reason: 'red' | 'injury'): void {
+  if (p.off) return;
+  p.off = reason;
+  p.vel = v2(0, 0);
+  p.intentTarget = null;
+  p.pos = v2(p.pos.x, p.pos.y >= 0 ? PITCH_HALF_W + OFF_PITCH_MARGIN : -(PITCH_HALF_W + OFF_PITCH_MARGIN));
+
+  const b = w.ball;
+  if (b.owner === p.id) {
+    b.owner = null;
+    b.lastTouch = p.id;
+    b.looseTimer = 0;
+  }
+  if (w.setPiece && w.setPiece.taker === p.id) w.setPiece.taker = null;
+}
+
+/**
+ * The referee's notebook, rolled after every foul.
+ *
+ * The offender is the one carded; the VICTIM is the one who can be hurt, which
+ * is why `awardFoul` passes them in. Both rolls come from `disciplineRng`, so
+ * none of this perturbs the match rng (see `World.disciplineRng`).
+ */
+function rollDiscipline(w: World, offender: Player, victim?: Player): void {
+  const d = w.disciplineRng;
+  if (d.chance(CARD_CHANCE)) {
+    const red = d.chance(RED_CARD_SHARE);
+    /*
+     * The ban is rolled even for a yellow, and then thrown away. Drawing it
+     * unconditionally keeps the number of values taken off `disciplineRng` per
+     * foul constant, so a yellow card cannot shift the stream and change what
+     * happens on some later foul — the same reasoning that gave discipline its
+     * own rng in the first place, one level down.
+     */
+    const ban = d.int(SUSPENSION_MATCHES[0], SUSPENSION_MATCHES[1]);
+    if (red) sendOff(w, offender, 'red');
+    w.events.push({
+      type: 'card',
+      team: offender.team,
+      player: offender.id,
+      card: red ? 'red' : 'yellow',
+      off: red,
+      matches: red ? ban : 0,
+    });
+  }
+  if (victim && !victim.off && d.chance(INJURY_CHANCE_FOUL)) {
+    const layoff = d.int(INJURY_MATCHES[0], INJURY_MATCHES[1]);
+    sendOff(w, victim, 'injury');
+    w.events.push({ type: 'injury', team: victim.team, player: victim.id, matches: layoff });
+  }
+}
+
+/**
+ * A foul has been given. Inside the offender's own box it is a penalty.
+ *
+ * `victim` is optional so existing callers (and tests) keep working; when it is
+ * supplied, the challenge can also put the fouled player out of the match.
+ */
+export function awardFoul(w: World, offender: Player, penalty: boolean, victim?: Player): void {
   const team: TeamId = (offender.team === 0 ? 1 : 0) as TeamId;
   w.stats.fouls[offender.team] += 1;
   // The referee stops play before anything else happens.
   w.events.push({ type: 'whistle', kind: 'foul' });
   w.events.push({ type: 'foul', team: offender.team, player: offender.id, penalty });
+
+  // Cards and injuries land before the restart is set up, so a dismissal takes
+  // effect on the very next tick rather than after the free kick.
+  rollDiscipline(w, offender, victim);
 
   if (penalty) {
     beginSetPiece(
@@ -261,7 +337,7 @@ function cornerStations(w: World, sp: SetPiece): Map<number, Vec2> {
 
   // Attackers: the strongest and best finishers get the most dangerous spots.
   const attackers = w.players
-    .filter((p) => p.team === sp.team && !p.isGK && p.id !== sp.taker)
+    .filter((p) => p.team === sp.team && !p.isGK && !p.off && p.id !== sp.taker)
     .sort(
       (a, b) =>
         b.attrs.strength + b.attrs.shooting - (a.attrs.strength + a.attrs.shooting),
@@ -375,6 +451,9 @@ function snapToStations(w: World): void {
   if (!sp) return;
   const dir = attackDir(sp.team);
   for (const p of w.players) {
+    // A player who has left the pitch does not take up a station — snapping
+    // them to one would march them back on.
+    if (p.off) continue;
     const target = setPieceTarget(w, p);
     if (!target) continue;
     // The taker stands just behind the ball rather than on top of it.
@@ -415,7 +494,7 @@ function pickBoxTarget(w: World, team: TeamId, taker: number | null): Vec2 | nul
   let best: Player | null = null;
   let bd = Infinity;
   for (const p of w.players) {
-    if (p.team !== team || p.isGK || p.id === taker) continue;
+    if (p.team !== team || p.isGK || p.off || p.id === taker) continue;
     const d = dist(p.pos, spot);
     if (d < bd) {
       bd = d;
@@ -432,7 +511,7 @@ function pickUpfieldTarget(w: World, team: TeamId): Vec2 | null {
   let best: Player | null = null;
   let bx = -Infinity;
   for (const p of w.players) {
-    if (p.team !== team || p.isGK) continue;
+    if (p.team !== team || p.isGK || p.off) continue;
     const x = p.pos.x * dir;
     if (x > bx) {
       bx = x;
@@ -447,7 +526,7 @@ function pickNearTarget(w: World, team: TeamId, from: Vec2, maxD: number): Vec2 
   let best: Player | null = null;
   let bd = Infinity;
   for (const p of w.players) {
-    if (p.team !== team || p.isGK) continue;
+    if (p.team !== team || p.isGK || p.off) continue;
     const d = dist(p.pos, from);
     if (d < bd) {
       bd = d;
