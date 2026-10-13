@@ -1,6 +1,7 @@
 // ui/hud.ts — in-match overlay: scoreboard, clock, tactical controls (spec §5.2, §15).
 
 import { clear, el, on } from './dom';
+import { displayLength } from './screens';
 import type { Mentality, SetPieceKind, World } from '../sim/types';
 import { WEATHERS } from '../sim/weather';
 import { SPECIAL_COOLDOWN } from '../sim/constants';
@@ -36,20 +37,6 @@ function displayMinute(w: World): string {
   }
   const m = 45 + Math.min(45, Math.floor(((w.clock - perHalf) / perHalf) * 45));
   return `${m}'`;
-}
-
-/**
- * The match length, for the conditions strip.
- *
- * Every offered length is a whole number of minutes, but `halfSeconds` is just a
- * positive number as far as the career is concerned — a hand-edited save or the
- * dev harness can put anything in it, and `(2 * 2) / 60` rendered as
- * `0.06666666666666667min` on screen. One decimal is enough for any value.
- */
-function displayLength(halfSeconds: number): string {
-  const minutes = (halfSeconds * 2) / 60;
-  if (!Number.isFinite(minutes) || minutes <= 0) return '--';
-  return Number.isInteger(minutes) ? `${minutes}min` : `${minutes.toFixed(1)}min`;
 }
 
 export class Hud {

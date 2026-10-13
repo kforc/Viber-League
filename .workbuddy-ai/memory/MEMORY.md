@@ -54,7 +54,9 @@ shipped as ONE self-contained `Viber-League.html`.
 
 - **Look at the screenshots.** Several real bugs (a raw `0.0666min` clock, a
   smudge of a centre-circle emblem, a hoarding hidden behind the goal net) were
-  caught by reading the rendered PNG, never by an assertion.
+  caught by reading the rendered PNG, never by an assertion. The raw-float match
+  length came back a second time in a *different* strip — when a screenshot shows
+  a formatting bug, grep for every other place that formats the same value.
 - **Probe before building.** `tools/cdp/probe-*.mjs` cost minutes and twice
   proved a requested feature already existed.
 - Judge art by rendering it (`docs/screens-brand/brand.png`), never by assuming.
@@ -136,3 +138,45 @@ shipped as ONE self-contained `Viber-League.html`.
   six clubs ten games in satisfied perfectly. Read the *columns*: `readTable()`
   in `flow-club.mjs` now asserts a fresh league is all zeros, that nobody has
   played more than the player, and that only the bye club is on 0.
+
+## Game modes (added 2026-10-13)
+
+- **A mode is a LENS over one pre-match flow, not a second flow.** `Mode` is
+  `'quick' | 'league'`; everything reads the selection through one accessor,
+  `get/set activeSelected`, which swaps `quickSelected` for `selected`. Adding a
+  mode must not mean adding a parallel set of screens.
+- **Quick Play is isolated by construction, not by scattered guards.**
+  `starters()` returns `quickSelected.slice(0, 5)` without touching
+  `fitSquad(this.career)`, so a friendly cannot inherit the league's absences;
+  `refreshBench()` returns `[]`; `commitLineup()` is a no-op; and every career
+  write in `enterResult` is gated on `!quick`.
+- **The write that had to be gated:** `withAbsences(tickAbsences(next), picked)`
+  + `commitCareer` sat OUTSIDE `if (this.fixture)`. A friendly has no fixture, so
+  it would have injured league players and served their bans silently. Anything
+  that mutates the career belongs inside a mode guard.
+- **Every title tile claims `mode = 'league'`.** `openSection()` sets it, because
+  `starters()` is mode-aware and the League screen would otherwise render the
+  *quick* five after a friendly.
+- **PvP is deliberately absent.** It needs a relay (the game is offline), a
+  bit-identical sim across engines (`sim/` calls `Math.exp`/`hypot`/`atan2`/
+  `cos`/`sin`, which ECMAScript lets engines approximate), and two-device
+  testing. A tile leading nowhere is worse than no tile; the harness asserts the
+  mode screen still offers exactly two cards.
+- **`displayLength(halfSeconds)` is the ONE match-length formatter** — in
+  `screens.ts` beside `LENGTH_OPTIONS`, imported by `hud.ts`. `halfSeconds` is
+  only "a positive number" to the career, so a raw `(2 * 2) / 60` renders as
+  `0.06666666666666667 min`. The HUD was fixed first and the venue screen was
+  not, so the bug survived in the twin. Two strips, one definition.
+
+## A check that passes on the WRONG SCREEN is worse than no check
+
+The Quick Play harness section drove a friendly with `runMatchTo('fulltime')` and
+asserted `exists('.overlay-screen')`. It went green while the friendly was stuck
+in the first half, because (a) a match stops at half-time for a mentality and
+driving past it spins until the guard gives up, and (b) `.overlay-screen` matches
+the **half-time panel too**. Every isolation check below it was therefore vacuous
+— no full-time whistle had been reached for the career to fail to record.
+
+Assert the element that only exists on the screen you mean (`.stats-table`, not
+`.overlay-screen`), and drive a match in two halves, always answering the panel.
+

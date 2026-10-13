@@ -34,6 +34,7 @@ import {
   renderHalftime,
   renderLeague,
   renderMinutes,
+  renderModes,
   renderOnboarding,
   renderOpponent,
   renderPenaltyDive,
@@ -64,6 +65,7 @@ import {
   isHomeFixture,
   nextFixture,
   opponentOf,
+  playerFixtures,
   playerPosition,
   playerRow,
   type Fixture,
@@ -101,11 +103,22 @@ import {
   type CareerState,
 } from './career';
 
+/**
+ * How the player is playing, chosen once on the mode screen.
+ *
+ * It is a lens over the pre-match flow rather than a second set of screens: the
+ * squad picker, the opponent screen and the match are the same either way. What
+ * it decides is whether a match is *real* — whether it files a result, costs
+ * anyone a game, and picks from the club's twelve or the whole roster.
+ */
+type Mode = 'quick' | 'league';
+
 type AppState =
   | 'onboarding'
   | 'signin'
   | 'account'
   | 'title'
+  | 'modes'
   | 'league'
   | 'squadview'
   | 'players'
@@ -162,7 +175,18 @@ export class Game {
   private halfTwoStarted = false;
 
   // --- Pre-match choices ---
+  /** Which mode the pre-match flow in progress belongs to. */
+  private mode: Mode = 'league';
   private selected: string[] = [];
+  /**
+   * The five Quick Play is fielding.
+   *
+   * Kept apart from `selected` on purpose. A friendly must not touch the league
+   * — no result filed, no knocks carried, nobody's ban run down — and giving it
+   * its own array is what makes that separation structural rather than a set of
+   * `if (quick)` guards scattered through the squad screen.
+   */
+  private quickSelected: string[] = [];
   private weather: WeatherKind = 'sun';
   private halfSeconds = LENGTH_OPTIONS[1].halfSeconds;
   private opponent: OpponentSelection | null = null;
@@ -313,6 +337,23 @@ export class Game {
   }
 
   /**
+   * The five the screen in front of the player is actually editing.
+   *
+   * One accessor rather than a branch at every call site. The squad screen,
+   * AUTO PICK, the pick toggle and `starters()` all read and write through
+   * here, so there is exactly one place that knows Quick Play is different —
+   * and no way to add a fourth screen later that forgets.
+   */
+  private get activeSelected(): string[] {
+    return this.mode === 'quick' ? this.quickSelected : this.selected;
+  }
+
+  private set activeSelected(v: string[]) {
+    if (this.mode === 'quick') this.quickSelected = v;
+    else this.selected = v;
+  }
+
+  /**
    * The five who actually take the pitch: the first five FIT members of the
    * squad, in squad order.
    *
@@ -322,6 +363,10 @@ export class Game {
    * *squad* order that decides who.
    */
   private starters(): string[] {
+    // Quick Play fields exactly the five that were picked, for one match. It
+    // never consults the career — not its lineup and not its absences — which
+    // is the whole promise of the mode.
+    if (this.mode === 'quick') return this.quickSelected.slice(0, SQUAD_SIZE);
     return fitSquad(this.career).slice(0, SQUAD_SIZE);
   }
 
@@ -412,6 +457,9 @@ export class Game {
    * venue and the length — a fixture is a match, not a shortcut past one.
    */
   private playNextFixture(): void {
+    // Every route into the season declares the mode, so a Quick Play session
+    // can never leak its five or its (absent) bench into a league fixture.
+    this.mode = 'league';
     const fixture = nextFixture(this.career.results);
     if (!fixture) {
       // The season is finished. The league screen is where the next one starts,
@@ -454,7 +502,7 @@ export class Game {
     renderPlayers(this.uiRoot, {
       filter: this.playersFilter,
       sort: this.playersSort,
-      lineup: this.selected,
+      lineup: this.activeSelected,
       max: LEAGUE_SQUAD_MAX,
       out: this.career.absences,
       onFilter: (f) => {
@@ -548,6 +596,11 @@ export class Game {
 
   /** Route a main-menu tile to its screen. */
   private openSection(section: MenuSection): void {
+    // Every tile on the title screen belongs to the club and the season — the
+    // League, the squad view, the player library, the career and the settings.
+    // Claiming league mode here means a screen that reads `starters()` can
+    // never be left showing the five from a friendly the player played earlier.
+    this.mode = 'league';
     switch (section) {
       case 'league':
         this.nav('league');
@@ -720,6 +773,9 @@ export class Game {
       case 'account':
         this.showAccount();
         break;
+      case 'modes':
+        this.showModes();
+        break;
       case 'league':
         this.showLeague();
         break;
@@ -772,7 +828,9 @@ export class Game {
     this.state = 'title';
     clear(this.uiRoot);
     const profile = this.profile;
-    renderTitle(this.uiRoot, () => this.playNextFixture(), {
+    // PLAY opens the mode screen rather than diving into the season, so the
+    // first decision is how to play and not which fixture is next.
+    renderTitle(this.uiRoot, () => this.nav('modes'), {
       // A guest has no name to show, so the chip is absent rather than showing
       // a placeholder — but every tile still opens its screen.
       manager: profile?.manager,
@@ -787,15 +845,62 @@ export class Game {
     this.presentInBand(ROSTER[0], '.menu-spacer', FRAMING.menu, { maxFill: 0.46 });
   }
 
+  /**
+   * How the player wants to play, chosen once.
+   *
+   * Two tiles, not three. Player-versus-player is a networking layer rather
+   * than a mode — it needs a relay, a join flow, and a simulation that is
+   * bit-identical on two different devices, which this one is not yet — so it
+   * is deliberately absent until that is proven. A tile that leads nowhere is
+   * worse than no tile.
+   */
+  private showModes(): void {
+    this.state = 'modes';
+    clear(this.uiRoot);
+    const fixtures = playerFixtures();
+    renderModes(this.uiRoot, {
+      season: this.career.season,
+      // Only the player's own fixtures are ever persisted, so a stored result
+      // is a game played. This is the same count the League screen shows.
+      played: fixtures.filter((f) => this.career.results[f.id]).length,
+      total: fixtures.length,
+      onQuick: () => this.enterQuickPlay(),
+      onLeague: () => this.playNextFixture(),
+      onBack: () => this.goBack(),
+    });
+    this.presentInBand(ROSTER[0], '.modes-spacer', FRAMING.menu, { maxFill: 0.46 });
+  }
+
+  /**
+   * Start a friendly.
+   *
+   * Nothing about the league is read or written. The picker opens on whatever
+   * five was last fielded in Quick Play — empty the first time — and draws from
+   * the whole roster rather than the club's twelve.
+   */
+  private enterQuickPlay(): void {
+    this.mode = 'quick';
+    // A friendly is never a fixture, so the result screen has nothing to file
+    // even if it tried to.
+    this.fixture = null;
+    this.nav('squad');
+  }
+
   private showSquad(): void {
     this.state = 'squad';
     clear(this.uiRoot);
+    const quick = this.mode === 'quick';
     renderSquadSelect(this.uiRoot, {
-      selected: this.selected,
+      selected: this.activeSelected,
       focus: this.focus(),
       filter: this.filter,
-      max: LEAGUE_SQUAD_MAX,
-      out: this.career.absences,
+      quick,
+      // Five and no more in Quick Play: a friendly fields no bench, so there is
+      // nothing for a sixth pick to be cover for.
+      max: quick ? SQUAD_SIZE : LEAGUE_SQUAD_MAX,
+      // A friendly has no absentees. Nobody is injured or banned going into one,
+      // so the OUT badges are absent rather than empty.
+      out: quick ? {} : this.career.absences,
       onCard: (id) => {
         this.detailId = id;
         this.nav('detail');
@@ -811,13 +916,15 @@ export class Game {
         this.showSquad();
       },
       onClear: () => {
-        this.selected = [];
+        this.activeSelected = [];
         this.commitLineup();
         this.showSquad();
       },
       onNext: () => {
         this.commitLineup();
-        this.nav('weather');
+        // Quick Play goes straight to the pitch. The venue and match-length
+        // screens are season ceremony — a friendly takes what it is given.
+        this.nav(quick ? 'opponent' : 'weather');
       },
       onBack: () => this.goBack(),
     });
@@ -825,9 +932,15 @@ export class Game {
     this.presentInBand(this.focus(), '.hero-stage', FRAMING.squad, { maxFill: 0.44 });
   }
 
-  /** The five are a career fact, not a per-match choice, so they are saved. */
+  /**
+   * The five are a career fact, not a per-match choice, so they are saved.
+   *
+   * In Quick Play they are neither. The mode sits deliberately outside the
+   * career, so nothing is written — the picker stays fully usable and the
+   * league squad the player built is still there when they go back to it.
+   */
   private commitLineup(): void {
-    this.commitCareer(withLineup(this.career, this.selected));
+    if (this.mode === 'league') this.commitCareer(withLineup(this.career, this.selected));
     this.refreshBench();
   }
 
@@ -844,18 +957,29 @@ export class Game {
    * that limit which gives a 12-player squad any point.
    */
   private refreshBench(): void {
+    // Quick Play fields five and no more. There is no squad to draw cover from,
+    // and manufacturing one would quietly hand a friendly the depth that the
+    // twelve-man squad exists to ration — so the bench is empty, and the pause
+    // menu disables Subs on its own when it is.
+    if (this.mode === 'quick') {
+      this.bench = [];
+      return;
+    }
     const starters = this.starters();
     this.bench = benchFromSquad(fitSquad(this.career), starters);
   }
 
   private togglePick(id: string): void {
-    if (this.selected.includes(id)) {
-      this.selected = this.selected.filter((x) => x !== id);
-    } else if (!isAvailable(this.career, id)) {
+    const picked = this.activeSelected;
+    const cap = this.mode === 'quick' ? SQUAD_SIZE : LEAGUE_SQUAD_MAX;
+    if (picked.includes(id)) {
+      this.activeSelected = picked.filter((x) => x !== id);
+    } else if (this.mode !== 'quick' && !isAvailable(this.career, id)) {
       // Injured or suspended: not selectable at all. The card says why.
+      // Quick Play carries no absences, so nothing is ever ruled out there.
       return;
-    } else if (this.selected.length < LEAGUE_SQUAD_MAX) {
-      this.selected = [...this.selected, id];
+    } else if (picked.length < cap) {
+      this.activeSelected = [...picked, id];
     }
     this.focusId = id;
     this.commitLineup();
@@ -873,10 +997,13 @@ export class Game {
     this.detailId = id;
     this.focusId = id;
     clear(this.uiRoot);
+    const quick = this.mode === 'quick';
+    const picked = this.activeSelected;
     renderViberDetail(this.uiRoot, v, {
-      selected: this.selected.includes(id),
-      canAdd: this.selected.length < LEAGUE_SQUAD_MAX,
-      out: this.career.absences[id] ?? null,
+      selected: picked.includes(id),
+      canAdd: picked.length < (quick ? SQUAD_SIZE : LEAGUE_SQUAD_MAX),
+      // A friendly carries no absences, so nobody wears an OUT badge in one.
+      out: quick ? null : this.career.absences[id] ?? null,
       onToggle: () => this.togglePick(id),
       onClose: () => this.goBack(),
     });
@@ -925,6 +1052,10 @@ export class Game {
     // The seed varies per attempt so the opponent's five is not identical every
     // time a fixture is re-entered, but the *club* is the one on the schedule.
     this.seed = Math.floor(Math.random() * 1e9);
+    // Quick Play has no venue screen to walk through, so the conditions come
+    // from the match seed instead. Varied match to match, and never a decision
+    // standing between the player and a friendly.
+    if (this.mode === 'quick') this.weather = fixtureWeather(this.seed, 'quick-play');
     const clubId = this.fixture ? opponentOf(this.fixture) : undefined;
     // The bench is rebuilt here too, so the opponent is drawn against the five
     // AND the bench actually carried into this match.
@@ -969,8 +1100,12 @@ export class Game {
    * players are injured and I cannot field a five".
    */
   private autoPick(): void {
-    const keep = [...this.selected];
-    const fit = ROSTER.filter((v) => isAvailable(this.career, v.id));
+    const keep = [...this.activeSelected];
+    // Quick Play picks from the whole roster and nobody is ever unavailable;
+    // the league picks from the club's own fit players.
+    const quick = this.mode === 'quick';
+    const cap = quick ? SQUAD_SIZE : LEAGUE_SQUAD_MAX;
+    const fit = quick ? [...ROSTER] : ROSTER.filter((v) => isAvailable(this.career, v.id));
 
     /** The best `n` fit players in a line, squad members first. */
     const pick = (role: string, n: number) => {
@@ -982,7 +1117,7 @@ export class Game {
 
     const ids: string[] = [];
     const add = (id?: string) => {
-      if (id && !ids.includes(id) && ids.length < LEAGUE_SQUAD_MAX) ids.push(id);
+      if (id && !ids.includes(id) && ids.length < cap) ids.push(id);
     };
 
     // The five who take the pitch, in the order the formation fills them, so
@@ -1005,8 +1140,8 @@ export class Game {
     // Backfill if the roster is ever short in a line.
     for (const v of [...fit].sort((a, b) => overallOf(b) - overallOf(a))) add(v.id);
 
-    this.selected = ids.slice(0, LEAGUE_SQUAD_MAX);
-    this.focusId = this.selected[0] ?? this.focusId;
+    this.activeSelected = ids.slice(0, cap);
+    this.focusId = this.activeSelected[0] ?? this.focusId;
   }
 
   /* --------------------------- match --------------------------- */
@@ -1016,9 +1151,14 @@ export class Game {
     // The first five fit players of the squad take the pitch; the bench covers
     // them from what is left. Both are drawn only from the club's own squad.
     const starters = this.starters();
-    const bench = this.bench.length
-      ? this.bench
-      : benchFromSquad(fitSquad(this.career), starters);
+    // Quick Play carries no bench at all. Falling through to the career squad
+    // here — which is what the league does when its own bench is empty — would
+    // quietly put the league's reserves on the pitch for a friendly.
+    const bench = this.mode === 'quick'
+      ? []
+      : this.bench.length
+        ? this.bench
+        : benchFromSquad(fitSquad(this.career), starters);
     this.world = createWorld({
       seed: this.seed,
       homeIds: starters,
@@ -1126,13 +1266,15 @@ export class Game {
   private confirmQuit(): void {
     const w = this.world;
     if (!w) return;
+    const quick = this.mode === 'quick';
     renderPauseConfirm(this.overlay, {
       onConfirm: () => {
         // Abandon the match: no result is recorded against the fixture. Hand
-        // control back to the league hub the same way the full-time screen does.
+        // control back the same way the full-time screen does, so quitting a
+        // friendly does not drop the player into the league hub either.
         clear(this.overlay);
         this.hud = null;
-        this.nav('league', false);
+        this.nav(quick ? 'title' : 'league', false);
       },
       onCancel: () => this.enterPauseMenu(),
     });
@@ -1323,11 +1465,22 @@ export class Game {
     // A finished match ends the flow: the next screen starts a fresh one.
     this.history = [];
 
+    /*
+     * A Quick Play match is over the moment the whistle goes.
+     *
+     * The mode sits deliberately outside the career: no result is filed, nobody
+     * picks up a knock, no ban is served and the calendar does not move. So
+     * there is nothing to commit and nothing to read back. Getting this wrong is
+     * invisible on the day — it surfaces later as a league player who is
+     * mysteriously out for two games after a friendly.
+     */
+    const quick = this.mode === 'quick';
+
     // File the result against the fixture. Scores are stored from the HOME
     // club's point of view, and the player is not always the home side.
     let note = '';
     let next = this.career;
-    if (this.fixture) {
+    if (!quick && this.fixture) {
       const playerGoals = w.teams[0].score;
       const cpuGoals = w.teams[1].score;
       const home = isHomeFixture(this.fixture);
@@ -1361,27 +1514,34 @@ export class Game {
      * back to a Viber is dropped by the helper rather than guessed at, so a
      * mismatch degrades to "no ban" — never to the wrong player banned.
      */
-    const picked = absencesFromEvents(
-      (id) => w.players.find((p) => p.id === id)?.viber,
-      this.matchEvents,
-    );
-    next = withAbsences(tickAbsences(next), picked);
-    this.commitCareer(next);
-    // New absences change who is fit, and the bench is drawn from the fit
-    // squad. Rebuilding here means the next match never offers a substitute who
-    // is already ruled out.
-    this.refreshBench();
+    const picked = quick
+      ? {}
+      : absencesFromEvents(
+          (id) => w.players.find((p) => p.id === id)?.viber,
+          this.matchEvents,
+        );
+    if (!quick) {
+      next = withAbsences(tickAbsences(next), picked);
+      this.commitCareer(next);
+      // New absences change who is fit, and the bench is drawn from the fit
+      // squad. Rebuilding here means the next match never offers a substitute
+      // who is already ruled out.
+      this.refreshBench();
+    }
 
     // What the player needs to read off the full-time screen: who this match
     // took out, and for how long. Names, because the ids mean nothing here.
-    const absences = Object.entries(picked)
-      .filter(([id, a]) => a.matches > 0 && this.career.lineup.includes(id))
-      .map(([id, a]) => ({
-        name: ROSTER_BY_ID[id]?.name ?? id,
-        kind: a.kind === 'suspension' ? ('suspension' as const) : ('injury' as const),
-        matches: a.matches,
-      }))
-      .sort((a, b) => b.matches - a.matches);
+    // A friendly takes nobody out, so there is nothing to list.
+    const absences = quick
+      ? []
+      : Object.entries(picked)
+          .filter(([id, a]) => a.matches > 0 && this.career.lineup.includes(id))
+          .map(([id, a]) => ({
+            name: ROSTER_BY_ID[id]?.name ?? id,
+            kind: a.kind === 'suspension' ? ('suspension' as const) : ('injury' as const),
+            matches: a.matches,
+          }))
+          .sort((a, b) => b.matches - a.matches);
     this.matchEvents = [];
 
     renderResult(
@@ -1390,14 +1550,21 @@ export class Game {
       () => {
         clear(this.overlay);
         this.hud = null;
-        this.nav('league', false);
+        // A friendly ends back at the title, not in the league hub it never
+        // belonged to.
+        this.nav(quick ? 'title' : 'league', false);
       },
       () => {
         clear(this.overlay);
         this.hud = null;
-        this.nav('squadview', false);
+        // In the league this is the read-only squad view, because changing the
+        // five goes through the fixture so the opponent is the real one. Quick
+        // Play has no fixture to protect, so it reopens the picker itself.
+        this.nav(quick ? 'squad' : 'squadview', false);
       },
-      { againLabel: 'Back to the League', changeLabel: 'Squad', note, absences },
+      quick
+        ? { againLabel: 'Main menu', changeLabel: 'Change five', note: 'Friendly · no league impact', absences }
+        : { againLabel: 'Back to the League', changeLabel: 'Squad', note, absences },
     );
   }
 

@@ -38,7 +38,7 @@ import {
   type Fixture,
   type SimEvent,
 } from '../../src/sim';
-import { LENGTH_OPTIONS } from '../../src/ui/screens';
+import { LENGTH_OPTIONS, displayLength } from '../../src/ui/screens';
 
 /**
  * The career is the second thing that outlives a reload, so it gets the same
@@ -568,6 +568,31 @@ describe('settings', () => {
     // that list leaves a fresh career with nothing selected.
     const offered = LENGTH_OPTIONS.map((o) => o.halfSeconds);
     expect(offered).toContain(DEFAULT_SETTINGS.halfSeconds);
+  });
+
+  /*
+   * The conditions strip shows the length twice — on the venue screen and in the
+   * HUD — and both go through `displayLength`. A screenshot is what caught this
+   * the first time: `halfSeconds` is only "a positive number" to the career, so
+   * anything that is not a whole number of minutes used to render its raw float.
+   * The dev harness pins a two-second half, which is exactly that case, and the
+   * venue screen was still printing `0.06666666666666667 min` after the HUD had
+   * been fixed.
+   */
+  it('never prints a raw float for a match length', () => {
+    for (const seconds of [2, 5, 30, 45]) {
+      const shown = displayLength(seconds);
+      expect(shown).not.toMatch(/\d{5,}/);
+      expect(shown.length).toBeLessThan(10);
+    }
+    // Every length the game actually offers reads as a clean whole minute.
+    for (const o of LENGTH_OPTIONS) {
+      expect(displayLength(o.halfSeconds)).toBe(`${(o.halfSeconds * 2) / 60} min`);
+    }
+    // And the degenerate values a hand-edited save could carry do not throw.
+    expect(displayLength(0)).toBe('--');
+    expect(displayLength(-5)).toBe('--');
+    expect(displayLength(Number.NaN)).toBe('--');
   });
 
   it('round-trips a change', () => {

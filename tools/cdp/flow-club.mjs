@@ -771,6 +771,11 @@ check('the opponent screen shows both fives',
 check('the conditions strip names the pitch and length',
   (await count('.conditions-strip .cond')) === 3,
   await text('.conditions-strip'));
+// Counting the chips is not enough — the bug this guards against was a chip that
+// was present and reading a raw float. Assert what it says.
+check('the conditions strip shows no raw float',
+  !/\d{4,}/.test((await text('.conditions-strip')) ?? ''),
+  'cond=' + (await text('.conditions-strip')));
 await shot('14-opponent');
 
 // Second pass: actually play it.
@@ -1093,6 +1098,160 @@ check('the casualty list says what is wrong',
   (await text('.league-screen .out-why')) === 'Injured',
   await text('.league-screen .out-why'));
 await shot('21b-league-injury');
+
+// -------------------------------------------- 9c. quick play leaves no trace
+/*
+ * The mode screen, and a friendly played with a season already running.
+ *
+ * This is where the two modes could quietly bleed into each other, so it is
+ * checked with the career in its most fragile state: one result filed, and one
+ * player two games into an injury. A friendly must file nothing AND must not
+ * run that ban down. `tickAbsences` used to fire on any match at all, which
+ * would have let a manager cure a two-match layoff by playing friendlies — and
+ * nothing on screen would have said so.
+ */
+await click('.back-btn');
+await sleep(700);
+await click('.play-btn');
+await sleep(800);
+check('PLAY opens the mode screen', await exists('.modes-screen'));
+const modeCards = await count('.mode-card');
+check('the mode screen offers two modes', modeCards === 2, 'cards=' + modeCards);
+const modeCopy = (await text('.modes-screen')) ?? '';
+check('the League tile carries the season context',
+  modeCopy.includes('1 of 12 played'), modeCopy.slice(0, 140));
+// PvP needs a relay and a simulation that is bit-identical on two devices. It
+// is absent until that is proven: a tile that leads nowhere is worse than none.
+check('PvP is not offered before it is proven',
+  !/pvp|versus|player vs/i.test(modeCopy), modeCopy.slice(0, 90));
+await shot('27-modes');
+
+await clickText('Quick Play', '.mode-card');
+await sleep(800);
+check('Quick Play opens the squad picker', await exists('.hero-select'));
+check('the picker asks for five, not twelve',
+  (await text('.hero-select .screen-sub'))?.includes('These five take the pitch') === true,
+  await text('.hero-select .screen-sub'));
+const quickStrip = await evalJs(`(() => {
+  const s = document.querySelector('.hero-select .squad-strip');
+  return s ? {
+    groups: s.querySelectorAll('.strip-group').length,
+    bench: s.querySelectorAll('.strip-group.bench').length,
+    slots: s.querySelectorAll('.strip-slot').length,
+  } : null;
+})()`);
+check('a friendly draws no reserve row', quickStrip?.bench === 0, JSON.stringify(quickStrip));
+check('the injured league player is not marked out in a friendly',
+  (await count('.hero-select .strip-slot.is-out')) === 0,
+  'out=' + (await count('.hero-select .strip-slot.is-out')));
+await shot('27b-quick-squad');
+
+await clickText('Auto Pick', '.ghost-btn');
+await sleep(800);
+const quickPicked = await count('.hero-select .viber-card2.selected');
+check('Auto Pick fills exactly five for a friendly', quickPicked === 5, 'picked=' + quickPicked);
+await clickText('Continue', '.primary-btn');
+await sleep(900);
+check('Quick Play skips the venue and match-length screens', await exists('.vs-row'));
+/*
+ * The conditions strip is where a raw float escapes: `halfSeconds` is only a
+ * positive number to the career, and this run pins a two-second half, so the
+ * strip's length reads `(2 * 2) / 60`. Counting the chips proved nothing — the
+ * chip was there, reading `0.06666666666666667 min`. Assert the text.
+ */
+const quickConds = (await text('.conditions-strip')) ?? '';
+check('the friendly conditions strip shows no raw float',
+  !/\d{4,}/.test(quickConds), 'cond=' + quickConds);
+check('the friendly conditions strip still names all three conditions',
+  (await count('.conditions-strip .cond')) === 3, 'cond=' + quickConds);
+await shot('27c-quick-opponent');
+
+await click('.primary-btn');
+await sleep(2500);
+check('a friendly reaches kick-off', await exists('.hud'));
+
+/*
+ * A friendly is a match like any other, so it stops at half-time for a
+ * mentality — and that is the whole reason this drives it in two halves.
+ *
+ * Driving straight to full time spins against a world parked in `halftime`
+ * waiting to be answered, and the loop gives up. The weaker `.overlay-screen`
+ * assertion then passed on the HALF-TIME panel, so the section reported success
+ * with the friendly still stuck in the first half — and every isolation check
+ * below was vacuous, because no full-time whistle had been reached for the
+ * career to fail to record. Asserting on `.stats-table` instead is what tells
+ * the result panel apart from the half-time one; both are `.overlay-screen`.
+ */
+console.log('\ndriving the friendly...');
+let quickHt = false;
+for (let i = 0; i < 30 && !quickHt; i++) {
+  await runMatchTo('halftime', 'quick play first half');
+  for (let k = 0; k < 20 && !quickHt; k++) {
+    if (await exists('.overlay-screen .choice-btn')) quickHt = true;
+    else await sleep(250);
+  }
+}
+check('a friendly stops at half-time for a mentality like any match', quickHt);
+if (quickHt) await clickText('Balanced', '.choice-btn');
+
+let quickFt = false;
+for (let i = 0; i < 30 && !quickFt; i++) {
+  await runMatchTo('fulltime', 'quick play second half');
+  for (let k = 0; k < 20 && !quickFt; k++) {
+    if (await exists('.stats-table')) { quickFt = true; break; }
+    await sleep(250);
+  }
+}
+check('a friendly reaches full time', quickFt);
+await shot('27d-quick-result');
+
+/*
+ * The screen has to LOOK like a friendly, not merely avoid writing anything. A
+ * result panel that offered "Back to the League" and a league position would
+ * tell the player the match counted, whatever the save file says.
+ */
+check('the friendly result screen says it counted for nothing',
+  (await text('.result-note')) === 'Friendly · no league impact',
+  'note=' + (await text('.result-note')));
+check('the friendly result screen carries no league position',
+  (await text('.overlay-screen'))?.includes('in the league') !== true);
+check('the friendly result screen offers the menu, not the league',
+  (await text('.overlay-screen'))?.includes('Main menu') === true);
+
+/*
+ * Read the save file, not the screen. This is the whole point of the mode: the
+ * screens would look identical whether or not the career had been written to.
+ */
+const afterQuick = await evalJs(`(() => {
+  const c = JSON.parse(localStorage.getItem('viber-league:career:v1') || '{}');
+  const ids = Object.keys(c.absences || {});
+  return {
+    results: Object.keys(c.results || {}).length,
+    absences: ids.length,
+    matches: ids.length ? c.absences[ids[0]].matches : null,
+    lineup: (c.lineup || []).length,
+  };
+})()`);
+check('a friendly files no league result',
+  afterQuick?.results === 1,
+  `results=${afterQuick?.results} — one was filed before the friendly, so nothing was added`);
+check('a friendly does not run an existing injury down',
+  afterQuick?.matches === 2, JSON.stringify(afterQuick));
+check('a friendly does not touch the league squad',
+  afterQuick?.lineup === 12, 'lineup=' + afterQuick?.lineup);
+
+await clickText('Main menu', '.primary-btn');
+await sleep(1000);
+check('a friendly ends back at the title', await exists('.menu-screen'));
+
+// Back to the league, where the next fixture is still waiting.
+await click('.menu-opt', 0);
+await sleep(900);
+check('the league is exactly where the friendly found it',
+  (await text('.lt-you .lt-num')) === '1' &&
+    (await count('.league-screen .out-list .out-row')) === 1,
+  'played=' + (await text('.lt-you .lt-num')) +
+    ' out=' + (await count('.league-screen .out-list .out-row')));
 
 await clickText('Play Next Match', '.primary-btn');
 await sleep(900);

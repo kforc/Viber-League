@@ -5694,3 +5694,79 @@ body {
     color: var(--ink-mute);
   }
 }
+
+/* ==========================================================================
+   MODE SELECT — Quick Play or League
+
+   Declared last on purpose. Two equal-specificity selectors are decided by
+   declaration order, and the .screen shell above already sets the layout this
+   builds on.
+   ========================================================================== */
+
+.modes-screen {
+  gap: 10px;
+}
+
+/* The band the hero is framed into. It takes the slack, so the cards stay on
+   the bottom edge at any viewport height rather than floating mid-screen. */
+.modes-spacer {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 40px;
+}
+
+.mode-cards {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.mode-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 13px 12px 11px;
+  border-radius: var(--r-md);
+  font-family: var(--font-display);
+  text-align: left;
+  background: var(--panel);
+  border: 3px solid var(--outline);
+  box-shadow: 0 5px 0 var(--outline);
+}
+
+.mode-card:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.mode-title {
+  font-size: 16px;
+  font-weight: 800;
+  /* Baloo 2's inline box is ~1.36em, so anything under 1.4 shaves the caps. */
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+
+.mode-sub {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+
+.mode-meta {
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+

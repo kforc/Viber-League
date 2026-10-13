@@ -170,6 +170,34 @@
    "spill": 0
   },
   {
+   "name": "27-modes",
+   "screen": "screen.modes-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "27b-quick-squad",
+   "screen": "screen.squad-screen.hero-select",
+   "clipped": 0,
+   "scrolls": 2,
+   "spill": 8
+  },
+  {
+   "name": "27c-quick-opponent",
+   "screen": "screen.squad-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
+   "name": "27d-quick-result",
+   "screen": "screen.overlay-screen",
+   "clipped": 0,
+   "scrolls": 0,
+   "spill": 0
+  },
+  {
    "name": "21c-picker-injury",
    "screen": "screen.squad-screen.hero-select",
    "clipped": 0,

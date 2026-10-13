@@ -343,7 +343,10 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
 
   const bottom = el('div', 'menu-bottom');
   const play = el('button', 'primary-btn play-btn');
-  play.append(el('span', '', 'Play'), el('span', 'play-sub', 'Next league fixture'));
+  // PLAY opens the mode screen, so it no longer names the next fixture. The
+  // season context lives on the League tile, where it is a choice rather than a
+  // promise about what this button does.
+  play.append(el('span', '', 'Play'), el('span', 'play-sub', 'Choose a mode'));
   on(play, 'click', onStart);
 
   const options = el('div', 'menu-options');
@@ -371,6 +374,64 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
     wrap.append(chip);
   }
 
+  root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 1a. Mode select — how the player wants to play                      */
+/* ------------------------------------------------------------------ */
+
+export interface ModesOpts {
+  season: number;
+  /** League games the player has completed, and how many the season holds. */
+  played: number;
+  total: number;
+  onQuick: () => void;
+  onLeague: () => void;
+  onBack: () => void;
+}
+
+/**
+ * Two ways in, and the difference between them stated on the card.
+ *
+ * The mode is a lens over one pre-match flow rather than two games, so the
+ * cards have to carry the distinction that the screens after them do not: a
+ * friendly records nothing and costs nothing, while the league is where the
+ * twelve-man squad, the injuries and the table actually bite.
+ */
+export function renderModes(root: HTMLElement, opts: ModesOpts): void {
+  clear(root);
+  const wrap = el('div', 'screen modes-screen');
+  wrap.append(screenHead('Play', 'Two ways in. Pick one.', opts.onBack));
+
+  // The empty band the renderer frames a Viber into — the same trick the title
+  // screen uses, so the hero lands between the header and the cards.
+  wrap.append(el('div', 'modes-spacer'));
+
+  const card = (cls: string, title: string, sub: string, meta: string, onClick: () => void) => {
+    const b = el('button', `mode-card ${cls}`);
+    b.append(
+      el('span', 'mode-title', title),
+      el('span', 'mode-sub', sub),
+      el('span', 'mode-meta', meta),
+    );
+    on(b, 'click', onClick);
+    return b;
+  };
+
+  const cards = el('div', 'mode-cards');
+  cards.append(
+    card('quick', 'Quick Play', 'Pick any five and play', 'Nothing recorded', opts.onQuick),
+    card(
+      'league',
+      'League',
+      'Your twelve, injuries and bans',
+      `Season ${opts.season} · ${opts.played} of ${opts.total} played`,
+      opts.onLeague,
+    ),
+  );
+
+  wrap.append(cards);
   root.append(wrap);
 }
 
@@ -894,6 +955,14 @@ export interface SquadSelectOpts {
   filter: RoleFilter;
   /** Squad cap. Five of these start; the rest are the season's depth. */
   max: number;
+  /**
+   * True for a friendly.
+   *
+   * It changes the copy and nothing else. A Quick Play side is five and no
+   * more, so "you may name up to 5" reads like a budget when it is the whole
+   * team, and the reserve row would be describing something that cannot exist.
+   */
+  quick?: boolean;
   /** Players who cannot be picked, and why. */
   out: OutMap;
   onCard: (id: string) => void;
@@ -997,17 +1066,29 @@ function squadStrip(
    * costs ~14px instead of ~40px.
    */
   const legend = el('div', 'strip-legend');
-  legend.append(
-    el('span', 'strip-legend-xi', `${starters} on the pitch`),
-    el('span', 'strip-legend-sep', '·'),
-    el('span', 'strip-legend-sub', `${reserveCount} in reserve`),
-  );
+  legend.append(el('span', 'strip-legend-xi', `${starters} on the pitch`));
+  if (reserveCount > 0) {
+    legend.append(
+      el('span', 'strip-legend-sep', '·'),
+      el('span', 'strip-legend-sub', `${reserveCount} in reserve`),
+    );
+  }
 
-  strip.append(
-    legend,
-    group('Starting five', 'on the pitch', 'start', entries(xi, starters)),
-    group(`${reserveCount} in reserve`, 'cover for injuries & bans', 'bench', entries(bench, reserveCount)),
-  );
+  strip.append(legend, group('Starting five', 'on the pitch', 'start', entries(xi, starters)));
+
+  /*
+   * No reserves, no reserve row.
+   *
+   * A Quick Play side is five and no more, and an empty "0 in reserve" heading
+   * over an empty row would be describing a squad that is not there — with a
+   * hint underneath it about injuries and bans, which a friendly does not have.
+   * The row is the league's, so it is drawn when the league has one.
+   */
+  if (reserveCount > 0) {
+    strip.append(
+      group(`${reserveCount} in reserve`, 'cover for injuries & bans', 'bench', entries(bench, reserveCount)),
+    );
+  }
   return strip;
 }
 
@@ -1017,8 +1098,10 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
 
   // ---- header + progress ring ----
   const head = screenHead(
-    'Choose Your Squad',
-    `Tap a Viber to inspect their qualities, then add them. The first five start; you may name up to ${opts.max}.`,
+    opts.quick ? 'Choose Your Five' : 'Choose Your Squad',
+    opts.quick
+      ? 'Tap a Viber to inspect their qualities, then add them. These five take the pitch.'
+      : `Tap a Viber to inspect their qualities, then add them. The first five start; you may name up to ${opts.max}.`,
     opts.onBack,
     progressRing(opts.selected.length, opts.max),
   );
@@ -1610,6 +1693,24 @@ export const LENGTH_OPTIONS: Array<{ halfSeconds: number; label: string; sub: st
   { halfSeconds: 150, label: '5 Min', sub: 'Full contest' },
 ];
 
+/**
+ * The match length, for the conditions strip — on the venue screen and in the
+ * HUD.
+ *
+ * Every length the player can pick is a whole number of minutes, but
+ * `halfSeconds` is only "a positive number" as far as the career is concerned:
+ * a hand-edited save or the dev harness can put anything in it, and a two-second
+ * half renders the raw `(2 * 2) / 60` as `0.06666666666666667 min` on screen.
+ * The HUD grew this guard when that was caught by reading a screenshot; the
+ * venue screen kept the bare expression and kept the bug. One decimal is enough
+ * for any value, so both now share the one definition.
+ */
+export function displayLength(halfSeconds: number): string {
+  const minutes = (halfSeconds * 2) / 60;
+  if (!Number.isFinite(minutes) || minutes <= 0) return '--';
+  return Number.isInteger(minutes) ? `${minutes} min` : `${minutes.toFixed(1)} min`;
+}
+
 export function renderMinutes(
   root: HTMLElement,
   opts: { value: number; onPick: (s: number) => void; onNext: () => void; onBack: () => void },
@@ -1690,7 +1791,7 @@ export function renderOpponent(
   conditions.append(
     el('span', 'cond', `${WEATHER_ICON[opts.weather]} ${VENUES[opts.weather].name}`),
     el('span', 'cond', `${WEATHERS[opts.weather].name}`),
-    el('span', 'cond', `${(opts.halfSeconds * 2) / 60} min`),
+    el('span', 'cond', displayLength(opts.halfSeconds)),
   );
 
   const actions = el('div', 'flow-actions');
