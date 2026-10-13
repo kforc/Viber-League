@@ -21,10 +21,11 @@ export const PLAYER_CLUB_ID = PLAYER_CLUB.id;
 /**
  * A club's baseline rating when it plays itself.
  *
- * Tiers run 0..5; the player's club is tier 0 by definition but is rated from
- * the five actually picked (see `playerStrength`), so this only ever describes
- * the CPU. 56..86 lines up with the roster's overalls, which is what makes a
- * mid-table CPU side a fair fight for a mid-table human five.
+ * Tiers run 0..5; this only ever describes the CPU. The player's club is tier 0
+ * by definition but never reaches here — a fixture the player is in is not
+ * simulated, so its strength is whatever the five on the pitch turn out to be.
+ * 56..86 lines up with the roster's overalls, which is what makes a mid-table
+ * CPU side a fair fight for a mid-table human five.
  */
 export function clubStrength(club: ClubDef): number {
   return 56 + club.tier * 6;
@@ -171,22 +172,67 @@ export function simulateCpuFixture(
 }
 
 /**
- * Fill in every fixture the player has not played.
+ * The rounds the player has completed a fixture in — the league's calendar.
  *
- * The player's club is rated by `playerStrength` (their five's overall) so the
- * table reflects the squad they have actually built rather than a fixed number.
+ * The player's own fixture list IS the season. A seven-club league rests one
+ * club a round, so the player sits out rounds 0 and 7; those are not matchdays
+ * for them and the CPU's half of them waits until the season is filed.
+ *
+ * Counting fixtures rather than round numbers is what keeps the table honest.
+ * Revealing "every round up to the player's last" instead hands the rest of the
+ * league a game in hand on the player from the very first whistle — which is
+ * the bug this whole rule exists to kill, only smaller.
+ */
+function playedRounds(results: ResultMap, schedule: Fixture[]): Set<number> {
+  const rounds = new Set<number>();
+  // `playerFixtures` is in round order, so the first gap ends the season's run.
+  for (const f of playerFixtures(schedule)) {
+    if (!results[f.id]) break;
+    rounds.add(f.round);
+  }
+  return rounds;
+}
+
+/**
+ * Fill in the CPU fixtures for the matchdays the player has already played.
+ *
+ * THE LEAGUE MOVES WITH THE PLAYER. Every other club plays its matchday at the
+ * same time the player plays theirs, and not before — a new season opens with
+ * all seven clubs on zero, and after matchday one every club that played has
+ * exactly one game behind it. The CPU's half of a matchday is simply not there
+ * until the player has reached it, so there is no result to read ahead of, and
+ * the player is never a game behind the pack.
+ *
+ * This used to fill in the WHOLE CPU season the moment a table was built. The
+ * player's first fixture was therefore kicked off against a table that already
+ * had six clubs ten games in and a leader on 25 points, and the only thing left
+ * to chase was arithmetic. The results that exist are now exactly the matchdays
+ * the player has completed.
+ *
+ * The end of the season is the one exception: once the player's own fixtures
+ * are all played, the whole table is revealed, because that is the table they
+ * finished in and it is the one the next season is filed from.
+ *
+ * Only CPU-vs-CPU fixtures are simulated, so none of this depends on the
+ * player's own strength — a fixture the player is in has no result until they
+ * play it.
  */
 export function completeResults(
   results: ResultMap,
-  opts: { seed: number; playerStrength: number; schedule?: Fixture[]; clubIds?: string[] },
+  opts: { seed: number; schedule?: Fixture[]; clubIds?: string[] },
 ): ResultMap {
   const schedule = opts.schedule ?? makeSchedule(opts.clubIds);
   const out: ResultMap = { ...results };
+  const done = playedRounds(out, schedule);
+  // A finished season reveals everything, so the table the player finished in
+  // is the one that gets filed.
+  const complete = seasonComplete(out, schedule);
 
   for (const f of schedule) {
     if (out[f.id]) continue;
+    // Not played yet — by anyone. The other clubs are on the same matchday.
+    if (!complete && !done.has(f.round)) continue;
     const involvesPlayer = f.homeId === PLAYER_CLUB_ID || f.awayId === PLAYER_CLUB_ID;
-    // A fixture the player is in has no result until they play it.
     if (involvesPlayer) continue;
 
     const home = CLUBS[f.homeId];
@@ -418,7 +464,17 @@ export function summariseSeason(
   seed: number,
   results: ResultMap,
 ): SeasonSummary {
-  const table = buildTable(results);
+  /*
+   * Complete the season before reading the table off it.
+   *
+   * A stored season holds the player's twelve fixtures and nothing else — the
+   * CPU results are derived, never persisted. Building a table from those alone
+   * puts every other club on zero, which made the player top of the league by
+   * default: every season ever filed recorded the player as CHAMPION, whatever
+   * they actually did. Completing first is also safe to call on a map that is
+   * already complete, so the caller need not know which it has.
+   */
+  const table = buildTable(completeResults(results, { seed }));
   const row = playerRow(table);
   const totals = careerTotals([results]);
   return {

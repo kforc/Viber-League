@@ -353,6 +353,33 @@ const leagueOverflowY = await evalJs(
   `getComputedStyle(document.querySelector('.league-screen')).overflowY`);
 check('the league screen scrolls its overflow rather than hiding it',
   leagueOverflowY === 'auto', 'overflow-y=' + leagueOverflowY);
+
+/*
+ * Read the table's actual numbers.
+ *
+ * The structural checks above cannot see a table that is *too complete*. A
+ * fresh season showing six clubs ten games in and a leader on 25 points looked
+ * perfectly well-formed — right number of rows, right header, nothing clipped —
+ * and shipped. The bug was only ever visible in the columns.
+ *
+ * Columns are P, W, D, L, GD, Pts, in that order.
+ */
+const readTable = () => evalJs(`(() => {
+  return [...document.querySelectorAll('.league-table .lt-row:not(.lt-head)')].map((row) => {
+    const nums = [...row.querySelectorAll('.lt-num')].map((n) => n.textContent.trim());
+    return {
+      club: row.querySelector('.lt-name')?.textContent?.trim() ?? '',
+      you: row.classList.contains('lt-you'),
+      played: Number(nums[0]),
+      points: Number(nums[5]),
+    };
+  });
+})()`);
+
+const fresh = await readTable();
+check('a fresh league starts every club on zero',
+  fresh?.length === 7 && fresh.every((r) => r.played === 0 && r.points === 0),
+  JSON.stringify(fresh?.map((r) => `${r.club} ${r.played}/${r.points}`)));
 await shot('02-league-table');
 
 console.log('\nleague note:', await text('.league-screen .section-note'));
@@ -974,6 +1001,24 @@ await sleep(900);
 check('the result returns to the League', await exists('.league-screen'));
 const playedCell = await text('.lt-you .lt-num');
 check('the player row now shows one played', playedCell === '1', 'played=' + playedCell);
+
+/*
+ * The league moves with the player, and this is the assertion that says so.
+ *
+ * It used to show every CPU club ten or eleven games in with the player on
+ * none — the whole CPU season was simulated the moment the table was built, so
+ * the only thing left to chase was arithmetic. Nobody is now a game ahead of
+ * the player, and the only club yet to play is the one with the bye.
+ */
+const after = await readTable();
+const me = after?.find((r) => r.you);
+const busiest = Math.max(...(after ?? []).map((r) => r.played));
+check('no club has played more league games than the player',
+  after != null && me != null && busiest <= me.played,
+  `busiest=${busiest} player=${me?.played}`);
+check('only the club with the bye is still on none played',
+  after?.filter((r) => r.played === 0).length === 1,
+  JSON.stringify(after?.map((r) => `${r.club} ${r.played}`)));
 await shot('18-league-after');
 
 await clickText('Fixtures', '.chip');

@@ -110,3 +110,29 @@ shipped as ONE self-contained `Viber-League.html`.
 - **The reserve row wraps; the starting five never does.** `.strip-group.start`
   is always one row of five (that row IS the "first five start" rule); the bench
   wraps at a 64px floor so a name is never truncated to "CHIM…".
+
+## The league moves with the player (added 2026-10-13)
+
+- **CPU results are DERIVED, never persisted.** Only the player's 12 fixtures go
+  to disk; the other 30 are simulated on demand from the season seed. Anything
+  that reads a table must go through `completeResults` first — including
+  `summariseSeason`, which used to build its table from the raw stored results
+  and so put every CPU club on zero. That made the player top of the league by
+  default and **every season ever filed recorded them as CHAMPION**. Fixed.
+- **A new season opens with all seven clubs on zero, and the CPU half of a
+  matchday does not exist until the player has reached it.**
+- **The reveal is keyed on the rounds the player PLAYED, not on round numbers.**
+  Seven clubs means someone rests each round and the circle method gives the
+  player the round-0 bye, so their fixtures are rounds `1-6, 8-13`. Revealing
+  "every round up to the player's last" instead puts five clubs on two games the
+  moment the player kicks off — the reported bug in miniature. Keyed on played
+  rounds the player is never behind: after matchday one six clubs and the player
+  are on 1 game and only the bye club is on 0.
+- **`completeResults` takes no `playerStrength`.** It never did anything — a
+  fixture the player is in is not simulated. Adding an option "just in case"
+  cost two call sites and an import when it was finally removed.
+- **Structure checks cannot see a table that is TOO complete.** The harness
+  asserted row count, header text and clipping — all of which a table showing
+  six clubs ten games in satisfied perfectly. Read the *columns*: `readTable()`
+  in `flow-club.mjs` now asserts a fresh league is all zeros, that nobody has
+  played more than the player, and that only the bye club is on 0.

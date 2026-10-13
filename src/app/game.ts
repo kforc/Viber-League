@@ -16,7 +16,6 @@ import {
   ROSTER,
   ROSTER_BY_ID,
   step,
-  teamOverall,
   TICK,
   type DiveDirection,
   type Mentality,
@@ -366,14 +365,11 @@ export class Game {
     this.state = 'league';
     clear(this.uiRoot);
     // The CPU half of the season is simulated on demand rather than stored, so
-    // the table is always complete and always matches the season seed.
+    // the table always matches the season seed. Only the rounds the player has
+    // already played are filled in — the rest of the league is on the same
+    // matchday they are, so a fresh season opens with all seven clubs on zero.
     const starters = this.starters();
-    const results = completeResults(this.career.results, {
-      seed: this.career.seed,
-      // The side that actually takes the pitch sets the strength, not the whole
-      // squad — a bench does not win you points.
-      playerStrength: teamOverall(starters),
-    });
+    const results = completeResults(this.career.results, { seed: this.career.seed });
     renderLeague(this.uiRoot, {
       season: this.career.season,
       results,
@@ -1343,12 +1339,7 @@ export class Game {
       );
       this.fixture = null;
 
-      const table = buildTable(
-        completeResults(next.results, {
-          seed: next.seed,
-          playerStrength: teamOverall(this.starters()),
-        }),
-      );
+      const table = buildTable(completeResults(next.results, { seed: next.seed }));
       const pos = playerPosition(table);
       if (pos) {
         const points = playerRow(table)?.points ?? 0;

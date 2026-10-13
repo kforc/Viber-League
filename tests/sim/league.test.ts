@@ -127,33 +127,144 @@ describe('CPU fixtures', () => {
   });
 });
 
-describe('completeResults', () => {
-  it('fills in every fixture the player is not in', () => {
-    const filled = completeResults({}, { seed: 1, playerStrength: 75 });
-    const schedule = makeSchedule();
-    const playerGames = playerFixtures(schedule);
+/**
+ * Play the first `n` of the player's fixtures, all won 1-0, and return the
+ * stored results. This is the calendar: matchday `n` is the player's nth game.
+ */
+function playMatchdays(n: number): Record<string, { home: number; away: number }> {
+  const out: Record<string, { home: number; away: number }> = {};
+  for (const f of playerFixtures().slice(0, n)) {
+    out[f.id] = isHomeFixture(f) ? { home: 1, away: 0 } : { home: 0, away: 1 };
+  }
+  return out;
+}
 
-    expect(Object.keys(filled)).toHaveLength(schedule.length - playerGames.length);
-    for (const f of playerGames) expect(filled[f.id]).toBeUndefined();
+/** Every one of the player's twelve fixtures, scored the same way. */
+function playerSeason(mine: number, theirs: number): Record<string, { home: number; away: number }> {
+  const out: Record<string, { home: number; away: number }> = {};
+  for (const f of playerFixtures()) {
+    out[f.id] = isHomeFixture(f) ? { home: mine, away: theirs } : { home: theirs, away: mine };
+  }
+  return out;
+}
+
+describe('completeResults', () => {
+  /*
+   * The league moves with the player. Every other club plays its matchday at
+   * the same time the player plays theirs and not before, so a new season opens
+   * with all seven clubs on zero and a result is never visible for a matchday
+   * the player has not reached. These tests pin that, because the failure mode
+   * is silent: a table that is simply *too complete* looks entirely plausible —
+   * it was showing six clubs ten games in before the player had kicked off.
+   */
+  it('leaves a brand-new season completely empty', () => {
+    const filled = completeResults({}, { seed: 1 });
+    expect(filled).toEqual({});
+
+    const table = buildTable(filled);
+    expect(table).toHaveLength(N);
+    for (const row of table) {
+      expect(row.played, `${row.clubId} played`).toBe(0);
+      expect(row.points).toBe(0);
+    }
+  });
+
+  it('puts the player on one game with nobody ahead after matchday one', () => {
+    const table = buildTable(completeResults(playMatchdays(1), { seed: 1 }));
+    const me = playerRow(table);
+    expect(me?.played).toBe(1);
+
+    // Nobody has played more than the player: the league is on their matchday.
+    for (const row of table) {
+      expect(row.played, `${row.clubId} played`).toBeLessThanOrEqual(1);
+    }
+    // Six clubs played and one rested — which is what a seven-club round is.
+    expect(table.filter((r) => r.played === 1)).toHaveLength(6);
+    expect(table.filter((r) => r.played === 0)).toHaveLength(1);
+  });
+
+  it('never reveals a matchday the player has not reached', () => {
+    const filled = completeResults(playMatchdays(1), { seed: 1 });
+    // The player's first fixture is round 1, so that is the only round the rest
+    // of the league has played. Round 0 is the player's bye — not a matchday.
+    for (const f of makeSchedule()) {
+      const isPlayer = f.homeId === PLAYER_CLUB_ID || f.awayId === PLAYER_CLUB_ID;
+      if (isPlayer || f.round === 1) continue;
+      expect(filled[f.id], `${f.id} (round ${f.round})`).toBeUndefined();
+    }
+    // And the round they did reach is there — the league moved with them.
+    const roundOne = makeSchedule().filter(
+      (f) => f.round === 1 && f.homeId !== PLAYER_CLUB_ID && f.awayId !== PLAYER_CLUB_ID,
+    );
+    expect(roundOne.length).toBeGreaterThan(0);
+    for (const f of roundOne) expect(filled[f.id]).toBeDefined();
+  });
+
+  it('fills in CPU fixtures only — never one of the player\'s own', () => {
+    const played = playMatchdays(3);
+    const filled = completeResults(played, { seed: 1 });
+    for (const f of playerFixtures()) {
+      if (played[f.id]) expect(filled[f.id]).toEqual(played[f.id]);
+      else expect(filled[f.id], `${f.id} is the player's`).toBeUndefined();
+    }
+  });
+
+  it('keeps the player level with the leaders on every single matchday', () => {
+    /*
+     * The invariant the player actually asked for. A seven-club league rests
+     * one club a round, and the player sits out rounds 0 and 7 — so a naive
+     * "reveal every round up to the player's last" hands five clubs two games
+     * the moment the player kicks off. Counting matchdays instead keeps the
+     * player tied with the busiest club from the first whistle to the last.
+     */
+    for (let n = 1; n <= 12; n++) {
+      const table = buildTable(completeResults(playMatchdays(n), { seed: 5 }));
+      const me = playerRow(table);
+      const most = Math.max(...table.map((r) => r.played));
+      expect(me?.played, `matchday ${n}: the player's games`).toBe(n);
+      expect(me?.played, `matchday ${n}: most games by any club`).toBe(most);
+    }
+  });
+
+  it('keeps the results it derived stable as the season goes on', () => {
+    // A matchday already played must read the same later in the season, or the
+    // table would quietly rewrite itself between one screen and the next.
+    const early = completeResults(playMatchdays(1), { seed: 9 });
+    const late = completeResults(playMatchdays(7), { seed: 9 });
+    expect(Object.keys(early).length).toBeGreaterThan(0);
+    for (const [id, r] of Object.entries(early)) expect(late[id]).toEqual(r);
   });
 
   it('never overwrites a result that is already there', () => {
     const f = playerFixtures()[0];
     const played = { [f.id]: { home: 4, away: 1 } };
-    const filled = completeResults(played, { seed: 1, playerStrength: 75 });
+    const filled = completeResults(played, { seed: 1 });
     expect(filled[f.id]).toEqual({ home: 4, away: 1 });
   });
 
   it('is stable across calls, so the table does not move on its own', () => {
-    const a = completeResults({}, { seed: 42, playerStrength: 75 });
-    const b = completeResults({}, { seed: 42, playerStrength: 75 });
+    const a = completeResults(playMatchdays(3), { seed: 42 });
+    const b = completeResults(playMatchdays(3), { seed: 42 });
     expect(a).toEqual(b);
   });
 
   it('changes with the season seed — a new season is a new set of results', () => {
-    const a = completeResults({}, { seed: 1, playerStrength: 75 });
-    const b = completeResults({}, { seed: 2, playerStrength: 75 });
+    const a = completeResults(playMatchdays(3), { seed: 1 });
+    const b = completeResults(playMatchdays(3), { seed: 2 });
     expect(a).not.toEqual(b);
+  });
+
+  it('reveals the whole table once the player\'s season is done', () => {
+    const played = playMatchdays(12);
+    const filled = completeResults(played, { seed: 3 });
+    expect(Object.keys(filled)).toHaveLength(makeSchedule().length);
+    // The player's own results are untouched — only the CPU half is derived.
+    for (const f of playerFixtures()) expect(filled[f.id]).toEqual(played[f.id]);
+
+    // And the finished table is a real one: everyone played everyone twice.
+    for (const row of buildTable(filled)) {
+      expect(row.played, `${row.clubId} played`).toBe((N - 1) * 2);
+    }
   });
 });
 
@@ -293,20 +404,32 @@ describe('career totals', () => {
 
 describe('summariseSeason', () => {
   it('files the finishing position, the points and the champion', () => {
-    const fixtures = playerFixtures();
-    const results: Record<string, { home: number; away: number }> = {};
-    for (const f of fixtures) {
-      const home = isHomeFixture(f);
-      results[f.id] = home ? { home: 2, away: 0 } : { home: 0, away: 2 };
-    }
-    const filled = completeResults(results, { seed: 3, playerStrength: 88 });
-    const summary = summariseSeason(1, 3, filled);
+    // Twelve 2-0 wins is enough to top a seven-club league whatever the CPU
+    // half does, so this stays true across seeds.
+    const summary = summariseSeason(1, 3, playerSeason(2, 0));
 
     expect(summary.played).toBe(12);
     expect(summary.won).toBe(12);
     expect(summary.points).toBe(36);
-    // Twelve wins at +2 should be enough to top a seven-club league.
     expect(summary.position).toBe(1);
     expect(summary.champion).toBe(PLAYER_CLUB_ID);
+  });
+
+  it('files the real champion when the player does not win the league', () => {
+    /*
+     * The regression this exists for: a stored season holds the player's twelve
+     * fixtures and nothing else, because the CPU results are derived rather
+     * than persisted. Building the table from those alone left every other club
+     * on zero — so the player was top of the league by default and EVERY season
+     * ever filed recorded them as champion, however badly they had played.
+     */
+    const summary = summariseSeason(2, 3, playerSeason(0, 2));
+
+    expect(summary.played).toBe(12);
+    expect(summary.won).toBe(0);
+    expect(summary.position).toBe(N);
+    expect(summary.champion).not.toBe(PLAYER_CLUB_ID);
+    // The champion must be a real club that actually earned it.
+    expect(LEAGUE_CLUB_IDS).toContain(summary.champion);
   });
 });
