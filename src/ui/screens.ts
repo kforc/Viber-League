@@ -481,56 +481,67 @@ interface HelpTopic {
   body: string[];
 }
 
+/*
+ * Every line here is checked against the sim, not written from what a football
+ * game is usually like. Two lines had drifted: SPECIAL was described as a long
+ * shot when it is a speed surge (`SPECIAL_SPEED_MULT`), and the weather section
+ * invented a fog that does not exist (`WEATHER_ORDER` is sun/rain/ice/cold). If
+ * a rule changes in `sim/`, this list is part of the change.
+ */
 const HELP_TOPICS: HelpTopic[] = [
   {
     title: 'Two ways to play',
     body: [
-      'Quick Play is a friendly. Pick any five and play them — nothing is recorded: no result, no injuries, no bans.',
-      'League is the season. You name a twelve-man squad, the first five fit players start each match, and what happens carries across the whole league.',
+      'Quick Play is a friendly. Pick any five and take them out — no result, no injuries and no bans are recorded.',
+      'League is the season. You name a squad of up to twelve, the first five fit players start each match, and everything that happens carries across the league.',
     ],
   },
   {
     title: 'Naming your side',
     body: [
       'Tap a Viber to read their card, then add them. The order you pick is the order they take the pitch.',
-      'An injury or a red card takes a player out for the next match or two. That is why the squad is twelve rather than five — name depth so a knock never leaves you short.',
-      'In a league match you can change three players from the pause menu.',
+      'Injuries and red cards keep players out of the next one to three league matches. That is why the squad holds twelve rather than five — name depth so a knock never leaves you short.',
+      'In a league match you get three substitutions, from the pause menu.',
     ],
   },
   {
     title: 'On the pitch',
     body: [
-      'SHOOT strikes the ball, PASS finds a team-mate, and SPECIAL fires a shot from distance once its meter fills.',
-      'The mentality row changes how the five press. Attack pushes up, Defend drops deep, Counter waits for the break.',
-      'PAUSE freezes the match. From there you can substitute, or Quit — quitting records nothing and returns you to the title.',
+      'SHOOT strikes at goal and PASS finds a team-mate. Deep in your own half you also get CLEAR, to hook the ball away.',
+      'SPECIAL is a six-second burst of pace for the whole five. It takes twenty-two seconds to come back, so spend it on a break.',
+      'The mentality row reshapes the five. Attack pushes them up, Balanced holds the shape, Defend drops deep and Counter sits off and breaks.',
+      'PAUSE freezes the match. From there you can substitute, or Quit — quitting abandons the match and nothing is recorded.',
     ],
   },
   {
-    title: 'Weather and venue',
+    title: 'Conditions',
     body: [
-      'Rain wets the pitch: the ball runs faster and players slip more.',
-      'Snow is heavier underfoot and slower. Fog hides the far side of the pitch. Clear is the fairest ground.',
+      'You choose the ground before a league match, and the weather changes how the ball behaves.',
+      'SUNNY — dry and fast. Clean touches and true bounces.',
+      'RAINY — wet and slick. The ball skids on and turns get loose.',
+      'ICY — frozen ground. Nobody can stop or turn in a hurry.',
+      'COLD — freezing air. Heavy legs and slow, grinding play.',
     ],
   },
   {
     title: 'The league',
     body: [
       'Seven clubs, twelve matches each. Every club plays on the same matchday, so nobody can get ahead of you.',
-      "The other clubs' results appear once you have played that matchday yourself — the table is never further along than you are.",
-      'Finish all twelve matches and the season is filed into your career history.',
+      "The other clubs' results appear once you have played that matchday yourself — the table never runs ahead of you.",
+      'Finish all twelve and the season is filed into your career history.',
     ],
   },
   {
     title: 'Penalties',
     body: [
-      'Taking one: pick your side and watch the keeper. Aiming away from the guess is worth more than aiming well.',
-      'Saving one: read the dive. A correct read can catch a shot that was struck cleanly.',
+      'Taking one: you pick the placement — left, centre or right — before the kick. The keeper guesses, and a good keeper reads your side more often than not.',
+      'Defending one: you commit to a dive before the taker strikes. If the ball passes through the lane you went to, you save it.',
     ],
   },
   {
     title: 'Your save',
     body: [
-      'Everything — the club, the squad, the season and the table — is stored on this device only.',
+      'The club, the squad, the season and the table are stored on this device only. Clearing your browser data clears the club with it.',
     ],
   },
 ];
@@ -544,6 +555,18 @@ export function renderHelp(root: HTMLElement, opts: HelpOpts): void {
   const wrap = el('div', 'screen help-screen');
   wrap.append(screenHead('Help', opts.onBack));
 
+  /*
+   * The write-up sits on a pitch: a green board ringed by a light-green
+   * touchline, with the halfway line and centre circle drawn faintly behind the
+   * text. The markings get their own layer so they hold still while the
+   * write-up scrolls beneath them — drawn on `.help-body` they would scroll away
+   * with the first topic.
+   */
+  const board = el('div', 'help-board');
+  const pitch = el('div', 'help-pitch');
+  pitch.setAttribute('aria-hidden', 'true');
+  pitch.append(el('span', 'hp-half'), el('span', 'hp-circle'), el('span', 'hp-spot'));
+
   const body = el('div', 'help-body');
   for (const t of HELP_TOPICS) {
     const sec = el('section', 'help-topic');
@@ -551,7 +574,9 @@ export function renderHelp(root: HTMLElement, opts: HelpOpts): void {
     for (const line of t.body) sec.append(el('p', 'help-line', line));
     body.append(sec);
   }
-  wrap.append(body);
+
+  board.append(pitch, body);
+  wrap.append(board);
   root.append(wrap);
 }
 

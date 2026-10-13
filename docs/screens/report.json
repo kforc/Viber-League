@@ -227,7 +227,7 @@
   },
   {
    "name": "22-muted-match",
-   "screen": "(none)",
+   "screen": "screen.overlay-screen",
    "clipped": 0,
    "scrolls": 0,
    "spill": 0

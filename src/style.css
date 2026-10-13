@@ -1310,15 +1310,38 @@ body {
 
 /* The player's own club, under the wordmark, wearing the crest they picked.
    Bigger and brighter than the little brand chip the profile screens use — this
-   line is about the player, not about us. */
+   line is about the player, not about us.
+
+   `display`, `height`, `border-radius` and `line-height` are restated here even
+   though `.menu-crest` above already sets them, because `.club-crest` is
+   declared LATER in this file and at equal specificity the later declaration
+   wins. `.club-crest` is a fixed-height 22px `inline-grid` built for a two-letter
+   abbreviation in a league table, and inheriting it laid this chip out as TWO
+   ROWS: the badge inside the 22px box, the club name pushed 17px below it and
+   clean outside the background — which is exactly where the framed Viber is
+   drawn, so the club name was being covered on the title screen. Restoring the
+   row is the whole fix; the badge and the name belong side by side. */
 .menu-crest.club-crest {
+  display: flex;
+  align-items: center;
+  height: auto;
+  border-radius: 999px;
+  border-width: 3px;
+  line-height: 1.4;
   margin-top: 9px;
-  padding: 4px 14px 4px 5px;
+  padding: 3px 14px 3px 4px;
   font-size: 11px;
   letter-spacing: 0.13em;
   color: var(--cream);
   background: rgba(9, 14, 34, 0.88);
   box-shadow: 0 4px 0 var(--outline);
+}
+
+/* The badge rides a touch smaller here than the 26px it is built at, so the
+   chip stays inside the landscape budget the title screen has to spend. */
+.menu-crest.club-crest .brand-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* The band between the logo and the buttons is left empty on purpose. */
@@ -5724,24 +5747,110 @@ body {
 }
 
 /* ==========================================================================
-   HELP — the game guide
+   HELP — the game guide, laid out as a pitch
    ========================================================================== */
 
-.help-body {
+/*
+ * The write-up sits on a green board ringed by a light-green touchline, so the
+ * guide reads as part of the football world rather than as a settings page.
+ *
+ * The markings carry no contrast budget of their own. The touchline sits in the
+ * board's padding ring where no text reaches; the halfway line and centre
+ * circle sit behind the copy and are kept faint enough that white text crossing
+ * one still clears 4.5:1. Both were measured on the rendered screen — the
+ * numbers matter because a light-green line under white text is exactly the
+ * kind of decoration that quietly costs legibility.
+ */
+.help-board {
+  position: relative;
   flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   max-width: 620px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.7);
+  /* Mown bands: two flat greens, no gloss. The delta is deliberately wide
+     enough to read as a pitch at a glance — the first pass used two greens 0.018
+     apart in luminance, which rendered as one flat field. */
+  background: repeating-linear-gradient(90deg, #17612e 0 36px, #0e4620 36px 72px);
+}
+
+/* The touchline — the light-green outline the board is built around. */
+.help-board::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 3px solid rgba(198, 246, 150, 0.55);
+  border-radius: 9px;
+  pointer-events: none;
+}
+
+/* Halfway line, centre circle and spot, on their own layer so they hold still
+   while the write-up scrolls under them.
+ *
+ * These sit BEHIND the copy, so their opacity is a legibility decision, not a
+ * taste one. At 0.14 the lightest pixel a glyph can land on measures 4.69:1
+ * against the lime titles and 5.62:1 against the white lines — measured on the
+ * rendered screen. Anything brighter than ~0.16 drops the titles under 4.5:1. */
+.help-pitch {
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+}
+
+.hp-half {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  transform: translateX(-50%);
+  background: rgba(198, 246, 150, 0.14);
+}
+
+.hp-circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 132px;
+  height: 132px;
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(198, 246, 150, 0.14);
+  border-radius: 50%;
+}
+
+.hp-spot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(198, 246, 150, 0.18);
+}
+
+.help-body {
+  position: relative; /* above the pitch markings */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  padding: 18px 18px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .help-topic + .help-topic {
-  margin-top: 14px;
+  margin-top: 15px;
 }
 
 .help-title {
-  margin: 0 0 4px;
+  margin: 0 0 5px;
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 800;
@@ -5749,21 +5858,24 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lime);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
 }
 
-/* A guide is body copy: it gets the brightest ink and the widest measure the
-   column allows, not the muted tone reserved for chrome. */
+/* A guide is body copy: it gets white and the widest measure the column allows,
+   not the muted tone reserved for chrome. The shadow is not decoration — it
+   holds the glyphs off the pitch markings underneath. */
 .help-line {
   margin: 0;
   font-family: var(--font-body);
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--ink);
+  color: #ffffff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
 }
 
 .help-line + .help-line {
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 /* ==========================================================================

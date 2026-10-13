@@ -346,6 +346,44 @@ check('the title screen wears the player\'s own club, not a placeholder',
   (await text('.club-crest')) === 'Riverside Rovers', 'crest=' + (await text('.club-crest')));
 check('a club with no stored crest falls back to the house mark',
   (await evalJs(`document.querySelector('.club-crest svg')?.getAttribute('aria-label')`)) === 'Viber');
+/*
+ * …and the name must be INSIDE the chip.
+ *
+ * The check above reads `textContent`, which returns the string whether or not
+ * a glyph was ever painted — so it passed for as long as `.club-crest`'s later
+ * `display: inline-grid` beat `.menu-crest`'s `display: flex`, laying the badge
+ * and the name out as TWO ROWS. The name hung ~17px below the chip's own
+ * background, straight under the framed Viber, and was covered by it on the
+ * title screen. Nothing that reads text can see that. Assert the geometry.
+ */
+const chip = await evalJs(`(() => {
+  const el = document.querySelector('.menu-crest.club-crest');
+  if (!el) return 'missing';
+  const name = [...el.querySelectorAll('span')].find((s) => (s.textContent || '').trim());
+  const badge = el.querySelector('.brand-icon');
+  if (!name || !badge) return 'no-children';
+  const box = (n) => { const r = n.getBoundingClientRect();
+    return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
+  const c = box(el), nm = box(name), bd = box(badge);
+  const rows = { chip: [Math.round(c.t), Math.round(c.b)], name: [Math.round(nm.t), Math.round(nm.b)], badge: [Math.round(bd.t), Math.round(bd.b)] };
+  // The name's vertical centre inside the chip's vertical span = same row.
+  const nameMid = nm.t + nm.h / 2;
+  return {
+    rows,
+    inside: nm.t >= c.t - 1 && nm.b <= c.b + 1 && nm.l >= c.l - 1 && nm.r <= c.r + 1,
+    sameRow: nameMid >= c.t && nameMid <= c.b,
+    // Side by side, not stacked: the badge ends before the name begins.
+    badgeBeforeName: bd.r <= nm.l + 2,
+    nameWidth: Math.round(nm.w),
+  };
+})()`);
+check('the club name sits inside its own chip',
+  chip !== 'missing' && chip !== 'no-children' && chip.inside === true, JSON.stringify(chip));
+check('the club name shares the chip\'s row with the badge',
+  chip !== 'missing' && chip !== 'no-children' && chip.sameRow === true && chip.badgeBeforeName === true,
+  JSON.stringify(chip));
+check('the club name is actually given room to draw',
+  chip !== 'missing' && chip !== 'no-children' && chip.nameWidth > 60, JSON.stringify(chip));
 // Measured here, while the tiles are still on screen — see the note where this
 // used to live, one screen later.
 console.log('tile paint:', JSON.stringify(await css('.menu-opt',
@@ -578,6 +616,77 @@ check('every topic has a title and at least one line',
    })()`)) === true);
 check('the guide explains how to play a match',
   (await text('.help-body'))?.includes('On the pitch') === true);
+
+/*
+ * The guide is a pitch: a green board with a light-green touchline, and the
+ * write-up stays white on it.
+ *
+ * These are computed-colour and geometry checks, not text ones. `textContent`
+ * returns the same string whether the board is a pitch or a plain list, so a
+ * text assertion is blind to the entire thing that was asked for — the same
+ * trap as the club chip, where the name read back fine while nothing was
+ * painted inside the pill.
+ */
+const board = await evalJs(`(() => {
+  const b = document.querySelector('.help-board');
+  const body = b && b.querySelector('.help-body');
+  const line = document.querySelector('.help-line');
+  const title = document.querySelector('.help-title');
+  if (!b || !body || !line || !title) return null;
+  const cs = getComputedStyle(b);
+  const br = b.getBoundingClientRect();
+  const lr = line.getBoundingClientRect();
+  const tr = title.getBoundingClientRect();
+  return {
+    bg: cs.backgroundImage,
+    borderW: parseFloat(cs.borderTopWidth),
+    radius: parseFloat(cs.borderTopLeftRadius),
+    overflow: getComputedStyle(body).overflowY,
+    line: getComputedStyle(line).color,
+    title: getComputedStyle(title).color,
+    markings: !!b.querySelector('.help-pitch .hp-circle') &&
+              !!b.querySelector('.help-pitch .hp-half'),
+    // Text inset from the board's border-box edge. The touchline sits at 8px
+    // + its own 3px, so anything under ~15 would be running through it.
+    inset: Math.round(Math.min(lr.left, tr.left) - br.left),
+    // The write-up must sit inside the board, not overflow it.
+    inside: lr.left >= br.left && lr.right <= br.right &&
+            lr.top >= br.top && lr.bottom <= br.bottom,
+    boardH: Math.round(br.height),
+    viewH: window.innerHeight,
+  };
+})()`);
+check('the guide sits on a board', board !== null);
+check('the board is a green pitch',
+  (board?.bg ?? '').includes('linear-gradient') &&
+  (board?.bg ?? '').includes('rgb(23, 97, 46)'),
+  (board?.bg ?? '').slice(0, 90));
+check('the board carries pitch markings', board?.markings === true);
+check('the write-up is white on the pitch',
+  board?.line === 'rgb(255, 255, 255)', board?.line);
+check('the write-up clears the light-green touchline',
+  (board?.inset ?? 0) >= 15, 'inset=' + board?.inset);
+check('the write-up stays inside the board', board?.inside === true);
+check('the guide body is the scroller, not the board',
+  board?.overflow === 'auto', board?.overflow);
+check('the board fits the viewport',
+  (board?.boardH ?? 1e9) <= (board?.viewH ?? 0),
+  board?.boardH + ' vs ' + board?.viewH);
+
+/*
+ * The guide is the only place the removed subtitles live now, so a line that
+ * describes a game other than this one is a real loss. Two had drifted: SPECIAL
+ * was written as a long shot when it is a speed surge, and the conditions
+ * section invented a fog the sim does not have. Pin the corrected facts.
+ */
+const guide = (await text('.help-body')) ?? '';
+check('the guide names the four conditions the game has',
+  ['SUNNY', 'RAINY', 'ICY', 'COLD'].every((n) => guide.includes(n)));
+check('the guide invents no weather the game has not got',
+  !/Fog/.test(guide));
+check('the guide describes SPECIAL as it is, not as a shot',
+  guide.includes('SPECIAL') && !/shot from distance/i.test(guide));
+
 await shot('04-help');
 
 await click('.back-btn');
