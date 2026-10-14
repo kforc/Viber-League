@@ -5924,3 +5924,80 @@ body {
   text-transform: uppercase;
   color: var(--ink);
 }
+
+/* ==========================================================================
+   Fatal / unsupported-environment screen
+   Shown when WebGL is unavailable, so the player never sees a blank page.
+   Deliberately on-brand: same dark world, lime mark, cream text, hard shadow.
+   ========================================================================== */
+.fatal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: auto;
+  background: radial-gradient(120% 90% at 50% 0%, var(--ink-3) 0%, var(--ink-0) 60%);
+}
+
+.fatal-card {
+  max-width: 420px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  background: var(--panel);
+  border: 3px solid var(--outline);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.55);
+  padding: 28px 24px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.fatal-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--on-lime);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 40px;
+  border: 3px solid var(--outline);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.fatal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--lime);
+  letter-spacing: 0.5px;
+}
+
+.fatal-body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.fatal-hint {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.fatal-hint strong {
+  color: var(--ink);
+}
