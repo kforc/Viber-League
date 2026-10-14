@@ -7,7 +7,7 @@ file** — no external assets of any kind. Every crest, every Viber and every
 referee's whistle is generated in code, and the single display font is inlined as
 a data URI. There are no network calls at runtime.
 
-**▶ Play it: <https://a7a971b1d49042219b159d7da1db5cb1.sg2.agentos-app.run>**
+**▶ Play it: <https://4fe548f954aa4ea9aaa4d780dd4581f0.sg2.agentos-app.run>**
 
 Nothing to install — it runs in the browser and works on a phone.
 
