@@ -40,7 +40,7 @@ const safeJs = js.replaceAll('</script', '<\\/script');
  */
 const out = html
   .replace(/<script[^>]*src="[^"]*"[^>]*><\/script>\s*/, () => '')
-  .replace(/<link[^>]*href="[^"]*"[^>]*>\s*/, () => '')
+  .replace(/<link[^>]*rel="stylesheet"[^>]*>\s*/, () => '')
   .replace('</head>', () => `  <style>\n${css}\n  </style>\n  </head>`)
   .replace('</body>', () => `  <script type="module">\n${safeJs}\n  </script>\n  </body>`);
 

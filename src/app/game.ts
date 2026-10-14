@@ -679,6 +679,7 @@ export class Game {
       limits: PROFILE_LIMITS,
       canHash: canHashPassword(),
       storageOk: storageAvailable(),
+      onGuest: () => this.showTitle(),
       onCreate: async (input) => {
         const profile = await createProfile(input);
         this.profile = profile;

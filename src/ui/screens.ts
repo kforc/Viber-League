@@ -718,6 +718,7 @@ export function renderOnboarding(
     canHash: boolean;
     storageOk: boolean;
     onSignIn?: () => void;
+    onGuest?: () => void;
     onCreate: (input: {
       manager: string;
       club: string;
@@ -856,6 +857,14 @@ export function renderOnboarding(
   );
 
   card.append(head, form);
+
+  if (opts.onGuest) {
+    const guestFoot = el('div', 'profile-foot');
+    const guestBtn = el('button', 'ghost-btn', 'Play as Guest');
+    on(guestBtn, 'click', opts.onGuest);
+    guestFoot.append(guestBtn);
+    card.append(guestFoot);
+  }
 
   if (!opts.storageOk) {
     card.append(

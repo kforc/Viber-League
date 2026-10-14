@@ -64,7 +64,7 @@ shasum -a 256 Viber-League.html
 ```
 
 ```
-8a35626f5a5d9febec8ac18e41099fcf6584048c0eeb3e2e4196203c0989e99e
+ae59e9b44aeb3e4facad657ca4390eb4633f388b5762fe7e43b53525d3b85606
 ```
 
 That is the SHA-256 of the committed `Viber-League.html` — 768 kB, byte for byte.
