@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Viber League - mobile-first arcade football club game (pre-MVP prototype)",
+  "license": "MIT",
+  "description": "Viber League - a mobile-first arcade football club game that ships as one self-contained HTML file",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
