@@ -432,6 +432,10 @@ export class Game {
       season: this.career.season,
       results,
       lineup: starters,
+      // The named squad, not the fit five. `starters` is already filtered down
+      // to at most five fit players, so it cannot tell "nobody signed" from
+      // "seven injured" — and the screen has to say the right one.
+      squadSize: this.career.lineup.length,
       out: this.squadAbsences(),
       tab: this.leagueTab,
       onTab: (t) => {

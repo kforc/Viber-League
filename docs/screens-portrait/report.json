@@ -23,6 +23,13 @@
    "spill": 0
   },
   {
+   "name": "02a-empty-squad-picker",
+   "screen": "screen.squad-screen.hero-select",
+   "clipped": 0,
+   "scrolls": 2,
+   "spill": 8
+  },
+  {
    "name": "02b-league-new-armed",
    "screen": "screen.squad-screen.league-screen",
    "clipped": 0,
@@ -227,7 +234,7 @@
   },
   {
    "name": "22-muted-match",
-   "screen": "screen.overlay-screen",
+   "screen": "(none)",
    "clipped": 0,
    "scrolls": 0,
    "spill": 0

@@ -157,6 +157,12 @@ SQUAD tile was removed and the checks that verified the squad view clicked it; t
 assertions moved to the result panel's "Squad" shortcut. A route that has been
 deleted cannot fail — it just stops covering anything.
 
+**A check can also REQUIRE the bug.** `flow-club.mjs` asserted that PLAY NEXT
+MATCH was disabled on a fresh league. The harness's own career has an empty
+squad, so it sat in exactly the state a player reported as a dead end — and
+pinned it as correct behaviour. When a control is disabled, ask what the player
+does next; if the answer is "nothing", the assertion is defending the bug.
+
 ## Front page and the league gate
 
 - **`leagueStartedAt` gates LEAGUE, and `loadCareer` deliberately does NOT
@@ -183,7 +189,16 @@ deleted cannot fail — it just stops covering anything.
   shortened it to `'No win yet.'` — a stale assertion fails for an unrelated
   reason.
 - **`.help-body` is a scroller** and must stay in `flow-club.mjs`'s `SCROLLERS`.
-- **`.screen-sub` and `.play-sub` are gone from the app**, with all their CSS.
+- **`.screen-sub` and `.play-sub` are gone from the app**, with all its CSS.
+- **A disabled primary is only honest when nothing can be done.** LEAGUE's PLAY
+  NEXT MATCH was disabled while `starters().length !== 5`, but starting a fixture
+  has always begun at the squad picker (which gates its own Continue on five fit),
+  so "no side named" was never a reason the flow could not start — it is what the
+  flow asks first. `newLeague` preserves the squad and `defaultCareer` starts it
+  empty, so a first league landed on a dead table whose only door to the picker
+  was the button the picker was needed for. Now disabled only when too many are
+  injured. **`starters` cannot tell "nobody signed" from "seven injured"** — both
+  are `[]` — so `LeagueOpts.squadSize` carries the named count beside `lineup`.
 
 ## Known, pre-existing, NOT fixed
 

@@ -511,11 +511,51 @@ console.log('\nleague note:', await text('.league-screen .section-note'));
 console.log('you-row paint:', JSON.stringify(await css('.lt-you',
   ['backgroundColor', 'borderLeftWidth', 'borderLeftColor'])));
 
-const gateDisabled = await evalJs(
-  `(() => { const b = [...document.querySelectorAll('.league-screen .primary-btn')][0];
-     return b ? b.disabled : 'none'; })()`);
-check('Play Next Match is gated until five are picked', gateDisabled === true,
-  'disabled=' + gateDisabled);
+/*
+ * The dead end, and the reason this section exists.
+ *
+ * PLAY NEXT MATCH used to be disabled until five fit players were already
+ * named. A brand-new club creates its first league with an EMPTY squad, so it
+ * landed on a table whose only control was inert — and the squad picker, the
+ * one screen that can fix that, was reachable only through that same button. A
+ * player who tapped LEAGUE and then tried to start a match got nothing.
+ *
+ * The check that used to sit here asserted the disabled button, which is the
+ * "a check that passes on the wrong screen" trap: it pinned the dead end as
+ * correct behaviour. Starting the next fixture has always begun at the picker,
+ * which gates its own Continue on five fit, so an empty squad is not a reason
+ * the flow cannot start — it is the first thing the flow asks.
+ */
+const playState = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.league-screen .primary-btn')][0];
+  return b ? { label: (b.textContent || '').trim(), disabled: b.disabled } : { missing: true };
+})()`);
+check('a fresh league offers a live way to play',
+  playState?.label === 'Play Next Match' && playState?.disabled === false,
+  JSON.stringify(playState));
+check('an empty squad is reported as unnamed, not as unfit',
+  (await text('.league-screen .section-note'))?.includes('No side named yet') === true,
+  await text('.league-screen .section-note'));
+
+// Walk it: the button must actually reach the screen that can fix the squad.
+await clickText('Play Next Match', '.primary-btn');
+await sleep(900);
+check('an empty squad still reaches the squad picker', await exists('.hero-select'));
+check('the picker states the shortfall rather than failing',
+  (await text('.hero-select .primary-btn')) === 'Pick 5 more',
+  await text('.hero-select .primary-btn'));
+check('the picker offers a way to fill the side in one tap',
+  (await evalJs(`[...document.querySelectorAll('.hero-select button')]
+     .some((b) => (b.textContent || '').trim() === 'Auto Pick')`)) === true);
+await shot('02a-empty-squad-picker');
+// Back out without picking: this section must not leave a squad behind, or the
+// strip checks in section 7 would find a side already named.
+await click('.back-btn');
+await sleep(700);
+check('back from the picker returns to the league table', await exists('.league-screen'));
+check('the squad is still empty after backing out',
+  (await text('.league-screen .section-note'))?.includes('No side named yet') === true,
+  await text('.league-screen .section-note'));
 
 /*
  * The league opt-in. Starting a league from scratch is destructive — there is

@@ -2450,6 +2450,14 @@ export interface LeagueOpts {
   results: ResultMap;
   /** The five that would take the pitch right now, for the squad rating. */
   lineup: string[];
+  /**
+   * How many players the club has named, fit or not.
+   *
+   * `lineup` cannot answer this: it is already filtered to the fit five, so a
+   * squad of twelve with seven injured and a squad of nobody both arrive here as
+   * an empty array. The two need different words and a different button.
+   */
+  squadSize: number;
   /** Players who cannot be picked, and why — the season's casualty list. */
   out: OutMap;
   tab: LeagueTab;
@@ -2499,18 +2507,35 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
    *
    * It used to narrate the season — "your five rate OVR 82, 1 played, 3 points,
    * +2 goal difference" — which is the table and the OVR chip read aloud. What
-   * is left is the one thing the screen cannot otherwise say: why PLAY NEXT
-   * MATCH is dead. A disabled control with no reason is a usability bug, not a
-   * subtlety, so this survives the purge.
+   * is left is the one thing the screen cannot otherwise say: why the side
+   * cannot play.
+   *
+   * There are two ways to fall short of five, and they are not the same problem.
+   * A club with nobody named needs to name players; a club with twelve named and
+   * seven injured needs to wait. The old line said "Add players, or wait for the
+   * injured to recover" for both, so it named neither the problem nor the door.
    */
-  const short = 5 - opts.lineup.length;
-  const note = short > 0
-    ? el(
-        'p',
-        'section-note',
-        `Only ${opts.lineup.length} fit for the next match — a side needs five. Add players, or wait for the injured to recover.`,
-      )
-    : null;
+  const fit = opts.lineup.length;
+  const named = opts.squadSize;
+  const block: 'none' | 'unnamed' | 'unfit' =
+    named < 5 ? 'unnamed' : fit < 5 ? 'unfit' : 'none';
+
+  const note =
+    block === 'unnamed'
+      ? el(
+          'p',
+          'section-note',
+          named === 0
+            ? 'No side named yet — a squad needs at least five.'
+            : `Only ${named} in the squad — a side needs five.`,
+        )
+      : block === 'unfit'
+        ? el(
+            'p',
+            'section-note',
+            `Only ${fit} fit for the next match — a side needs five. Wait for the injured to recover.`,
+          )
+        : null;
 
   /*
    * The treatment room, named, and placed ABOVE the table.
@@ -2555,10 +2580,27 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
     on(next, 'click', opts.onNextSeason);
     actions.append(next);
   } else {
+    /*
+     * PLAY NEXT MATCH is live whenever a fixture remains.
+     *
+     * It used to be disabled unless five fit players were already named, which
+     * made a brand-new club a dead end: creating a league leaves the squad
+     * empty, so the one control on the screen was inert and nothing said where
+     * to go. The squad picker's only door was this button.
+     *
+     * It was also the wrong question. Starting the next fixture has always
+     * begun at the squad picker — that is where the five are named, where the
+     * starting-five strip lives, and where AUTO PICK is — and the picker gates
+     * its own Continue on five fit ("Pick 2 more"). So "no side named" is not a
+     * reason the flow cannot start; it is the first thing the flow will ask.
+     *
+     * Too many injured is the one case with no action behind it: the answer is
+     * to wait, and a disabled button plus the note above is the honest way to
+     * say so. It is also the only case where five are named and still cannot
+     * play, so `block` is the whole distinction.
+     */
     const next = el('button', 'primary-btn', 'Play Next Match');
-    // Five fit players are the bar; the rest of the squad is depth, not a
-    // requirement. A side that cannot field five is the only real block.
-    next.disabled = opts.lineup.length !== 5;
+    next.disabled = block === 'unfit';
     if (next.disabled) next.classList.add('disabled');
     on(next, 'click', opts.onPlayNext);
     actions.append(next);
