@@ -1,12 +1,18 @@
 # Viber League
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 A mobile-first arcade football club game. **It ships as one self-contained HTML
 file** — no external assets of any kind. Every crest, every Viber and every
 referee's whistle is generated in code, and the single display font is inlined as
 a data URI. There are no network calls at runtime.
 
-**[▶ Play it](Viber-League.html)** — open that one file in a browser. Nothing to
-install.
+**▶ Play it: <https://a7a971b1d49042219b159d7da1db5cb1.sg2.agentos-app.run>**
+
+Nothing to install — it runs in the browser and works on a phone.
+
+Or download [`Viber-League.html`](Viber-League.html) and open that. Same file,
+byte for byte.
 
 <p align="center">
   <img src="docs/media/title.png" width="49%" alt="The Viber League title screen">
@@ -43,6 +49,30 @@ npm test           # simulation test suite (determinism + balance + flow)
 
 Dev hooks: append `?autostart` to skip the title screen and drop straight into a
 match, and `?seed=<n>` to pin it to one.
+
+---
+
+## Verify the build
+
+The shipped file is not a black box you have to take on trust. It builds
+reproducibly, so you can rebuild it from this source and check it yourself:
+
+```bash
+npm ci
+npm run bundle
+shasum -a 256 Viber-League.html
+```
+
+```
+8a35626f5a5d9febec8ac18e41099fcf6584048c0eeb3e2e4196203c0989e99e
+```
+
+That is the SHA-256 of the committed `Viber-League.html` — 768 kB, byte for byte.
+CI runs the same thing on every push and **fails if a fresh build stops matching**,
+so the claim cannot quietly rot.
+
+There is no server, no network call and no external asset in that file. The
+bundler fails the build if one appears.
 
 ---
 
@@ -166,6 +196,12 @@ because both of them need it and neither is allowed to import the other. It is
 data and geometry, not presentation: the SVG path strings *are* the artwork.
 
 ### The simulation is the product
+
+A match result here is not a number a server reports — it is a **replay**. The
+simulation is seeded and fully deterministic, so anyone can re-run the same
+fixture and confirm the same score. That property is what the whole architecture
+is built around, and it is what makes a result *verifiable* rather than merely
+*trustworthy*.
 
 - **Fixed 60 Hz timestep.** The sim never sees a variable `dt`.
 - **Seeded PRNG only** — there is no `Math.random()`, `Date.now()` or

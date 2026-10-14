@@ -23,4 +23,10 @@ docs/viber-league-*.png
 # Agent working notes (project memory) and WorkBuddy app artifacts. Kept on disk,
 # deliberately not published.
 .workbuddy-ai/
+.workbuddy/
 .wbapp_*
+
+# The publish directory: `Viber-League.html` copied to `index.html` so the
+# published page IS the verifiable artifact, byte for byte. Regenerated at deploy
+# time, never edited.
+site/

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck, tests, reproducible bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build the single-file bundle
+        run: npm run bundle
+
+      # The README tells people to rebuild this file and compare the hash, so CI
+      # has to be the thing that proves the claim rather than a promise that it
+      # holds. `npm run bundle` already asserts the script body round-trips and
+      # that no external reference survives; this asserts the bytes match the
+      # committed copy.
+      - name: The committed bundle matches a fresh build
+        run: |
+          if ! git diff --exit-code -- Viber-League.html; then
+            echo "::error file=Viber-League.html::Viber-League.html does not match a fresh build. Run 'npm run bundle' and commit the result."
+            exit 1
+          fi
+
+      - name: Record the bundle hash
+        run: |
+          {
+            echo "### Viber-League.html"
+            echo
+            echo '```'
+            echo "sha256  $(sha256sum Viber-League.html | cut -d' ' -f1)"
+            echo "bytes   $(wc -c < Viber-League.html)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
