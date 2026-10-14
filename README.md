@@ -11,8 +11,8 @@ a data URI. There are no network calls at runtime.
 
 Nothing to install — it runs in the browser and works on a phone.
 
-Or download [`Viber-League.html`](Viber-League.html) and open that. Same file,
-byte for byte.
+For a copy with nothing added to it, download
+[`Viber-League.html`](Viber-League.html) and open that instead.
 
 <p align="center">
   <img src="docs/media/title.png" width="49%" alt="The Viber League title screen">
@@ -73,6 +73,13 @@ so the claim cannot quietly rot.
 
 There is no server, no network call and no external asset in that file. The
 bundler fails the build if one appears.
+
+**One caveat about the hosted link.** It serves this same file, but the host
+injects a small analytics beacon (`beacon.cdn.qq.com`) into the HTML on the way
+out — about 575 bytes, just before `</head>`. It does not touch the game, but it
+is a network call the file itself does not make, so the page at that URL is *not*
+byte-identical to the file here. Download the file, or self-host it anywhere, and
+you get exactly the hash above.
 
 ---
 
