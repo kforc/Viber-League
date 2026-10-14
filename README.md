@@ -1,6 +1,6 @@
 # Viber League
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/kforc/Viber-League/actions/workflows/ci.yml/badge.svg)](https://github.com/kforc/Viber-League/actions/workflows/ci.yml)
 
 A mobile-first arcade football club game. **It ships as one self-contained HTML
 file** — no external assets of any kind. Every crest, every Viber and every
