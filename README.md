@@ -7,7 +7,7 @@ file** — no external assets of any kind. Every crest, every Viber and every
 referee's whistle is generated in code, and the single display font is inlined as
 a data URI. There are no network calls at runtime.
 
-**▶ Play it:** follow the [Deploy](#deploy) section below to get a `*.workers.dev` link — the previous host (`agentos-app.run`) could not stream the 770 kB bundle reliably and has been retired.
+**▶ Play it:** a live `*.github.io` link is created automatically on push by the [GitHub Pages workflow](#c-githubio-via-github-pages-no-account-needed). Prefer Cloudflare? The [Deploy](#deploy) section also covers a `*.workers.dev` / `*.pages.dev` link. The old `agentos-app.run` host could not stream the 770 kB bundle reliably and has been retired.
 
 Nothing to install — it runs in the browser and works on a phone.
 
@@ -80,6 +80,24 @@ If you would rather not install anything:
 3. Run `npm run prepare:site` once, then upload the resulting `site/`
    directory (drag the whole folder onto the page).
 4. Click **Deploy site**. Cloudflare prints a `*.pages.dev` URL.
+
+### C. `*.github.io` via GitHub Pages (no account needed)
+
+Because the code already lives on GitHub, the simplest link is one GitHub
+makes for you — no Cloudflare sign-up, no wrangler, no token. A
+[`deploy-pages.yml`](.github/workflows/deploy-pages.yml) workflow builds
+`Viber-League.html`, assembles `site/`, and publishes it on every push to
+`main`. The first run enables Pages with "GitHub Actions" as the source
+automatically.
+
+The link takes the form:
+
+```
+https://kforc.github.io/viber-league/
+```
+
+(gitHub lowercases the repository name). Confirm the game loads, then paste
+it into the "Play it" line at the top of this README.
 
 ### Why not the old link?
 
