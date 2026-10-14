@@ -7,7 +7,7 @@ file** — no external assets of any kind. Every crest, every Viber and every
 referee's whistle is generated in code, and the single display font is inlined as
 a data URI. There are no network calls at runtime.
 
-**▶ Play it: <https://4fe548f954aa4ea9aaa4d780dd4581f0.sg2.agentos-app.run>**
+**▶ Play it:** follow the [Deploy](#deploy) section below to get a `*.workers.dev` link — the previous host (`agentos-app.run`) could not stream the 770 kB bundle reliably and has been retired.
 
 Nothing to install — it runs in the browser and works on a phone.
 
@@ -26,6 +26,67 @@ For a copy with nothing added to it, download
   <img src="docs/media/league.png" width="49%" alt="The league table after a matchday">
   <img src="docs/media/help.png" width="49%" alt="The in-game guide, laid out on a pitch">
 </p>
+
+---
+
+## Deploy
+
+The game is one self-contained HTML file plus six PNGs (used for the
+social-preview card), so any static host will serve it. The recommended
+home is **Cloudflare's free tier** — the edge delivers a 770 kB file in
+well under a second, and the `*.workers.dev` URL is permanent.
+
+Two routes, both starting from this repo:
+
+### A. `*.workers.dev` with the Wrangler CLI
+
+This is the "real" deploy — a Worker serves the static assets from
+Cloudflare's edge. The `wrangler.toml` and `worker.js` at the root of
+this repo are set up for it.
+
+```bash
+# 1. Install wrangler (once, on your machine)
+npm install --save-dev wrangler
+
+# 2. Link this machine to your Cloudflare account
+npx wrangler login
+
+# 3. Build the deploy directory and push it
+npm run deploy:cf
+```
+
+`npm run deploy:cf` runs `prepare:site` (which copies
+`Viber-League.html` to `site/index.html` and the PNGs to
+`site/docs/media/`) and then `wrangler deploy`. The output ends with a
+URL of the form
+
+```
+https://viber-league.<your-account-subdomain>.workers.dev
+```
+
+Open it once to confirm the game loads, then paste the URL into the
+"Play it" line near the top of this README. (If wrangler reports it
+created a `workers.dev` subdomain for your account on the first
+deploy, that is the one to use — you can rename the project later
+under Workers → Settings.)
+
+### B. `*.pages.dev` via the Cloudflare dashboard (no CLI)
+
+If you would rather not install anything:
+
+1. Sign in at <https://dash.cloudflare.com/>, then **Workers & Pages →
+   Create → Pages → Upload assets**.
+2. Project name: `viber-league`.
+3. Run `npm run prepare:site` once, then upload the resulting `site/`
+   directory (drag the whole folder onto the page).
+4. Click **Deploy site**. Cloudflare prints a `*.pages.dev` URL.
+
+### Why not the old link?
+
+The `agentos-app.run` link that lived here through mid-October 2026 was
+a preview; its edge could not stream the 770 kB bundle reliably
+(headers arrived, then the body stalled), which produced the
+blank-page symptom. Cloudflare does not have that problem.
 
 ---
 
@@ -67,19 +128,19 @@ shasum -a 256 Viber-League.html
 ae59e9b44aeb3e4facad657ca4390eb4633f388b5762fe7e43b53525d3b85606
 ```
 
-That is the SHA-256 of the committed `Viber-League.html` — 768 kB, byte for byte.
+That is the SHA-256 of the committed `Viber-League.html` — 770 kB, byte for byte.
 CI runs the same thing on every push and **fails if a fresh build stops matching**,
 so the claim cannot quietly rot.
 
 There is no server, no network call and no external asset in that file. The
 bundler fails the build if one appears.
 
-**One caveat about the hosted link.** It serves this same file, but the host
-injects a small analytics beacon (`beacon.cdn.qq.com`) into the HTML on the way
-out — about 575 bytes, just before `</head>`. It does not touch the game, but it
-is a network call the file itself does not make, so the page at that URL is *not*
-byte-identical to the file here. Download the file, or self-host it anywhere, and
-you get exactly the hash above.
+**The served page is byte-identical to the file.** On Cloudflare (the
+host the [Deploy](#deploy) section sets up) the edge serves the
+committed `Viber-League.html` as-is — no beacon, no injection, no
+modification. The earlier `agentos-app.run` preview host appended a
+small analytics tag and has been retired; that is why the page at *its*
+URL was *not* the same bytes. On Cloudflare it is.
 
 ---
 

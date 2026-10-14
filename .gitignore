@@ -17,6 +17,7 @@ dist/
 # `docs/media/`, which is committed on purpose.
 docs/screens/
 docs/screens-*/
+docs/diag-*/
 docs/brand-pitch/
 docs/viber-league-*.png
 
@@ -30,3 +31,6 @@ docs/viber-league-*.png
 # published page IS the verifiable artifact, byte for byte. Regenerated at deploy
 # time, never edited.
 site/
+
+# Wrangler's local cache (created in the cwd by `npx wrangler deploy`).
+.wrangler/

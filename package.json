@@ -13,7 +13,9 @@
     "shots:portrait": "VW=390 VH=844 tools/cdp/run.sh tools/cdp/flow-club.mjs docs/screens-portrait",
     "sheet": "python3 tools/cdp/contact-sheet.py docs/screens docs/viber-league-club.png --cols 3 --scale 0.52",
     "preview": "vite preview --host",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare:site": "node tools/build-site.mjs",
+    "deploy:cf": "npm run prepare:site && npx --yes wrangler deploy"
   },
   "dependencies": {
     "three": "^0.169.0"

@@ -1,0 +1,22 @@
+# Cloudflare Workers config for Viber League.
+# Deploys the contents of ./site/ as a static site served by a Worker.
+# The site/ directory is built by `npm run prepare:site` (gitignored),
+# so the source of truth stays the committed Viber-League.html and
+# docs/media/ — site/ is reproducible build output.
+#
+# First-time setup (run once on your machine, not from the sandbox):
+#   1. npm install                       # installs wrangler via npx on first run
+#   2. npx wrangler login                # opens a browser, links this machine
+#   3. npm run deploy:cf                 # builds site/ and deploys
+#
+# wrangler prints the live URL — by default it is
+#   https://viber-league.<your-account-subdomain>.workers.dev
+# (set `workers_dev = true` explicitly if you ever turn it off globally).
+name = "viber-league"
+main = "worker.js"
+compatibility_date = "2025-10-01"
+workers_dev = true
+
+[assets]
+directory = "./site"
+binding = "ASSETS"
