@@ -7,7 +7,7 @@ file** — no external assets of any kind. Every crest, every Viber and every
 referee's whistle is generated in code, and the single display font is inlined as
 a data URI. There are no network calls at runtime.
 
-**▶ Play it:** a live `*.github.io` link is created automatically on push by the [GitHub Pages workflow](#c-githubio-via-github-pages-no-account-needed). Prefer Cloudflare? The [Deploy](#deploy) section also covers a `*.workers.dev` / `*.pages.dev` link. The old `agentos-app.run` host could not stream the 770 kB bundle reliably and has been retired.
+**▶ Play it:** a live `*.github.io` link is created automatically on push by the [GitHub Pages workflow](#c-githubio-via-github-pages-no-account-needed). Prefer Cloudflare? The [Deploy](#deploy) section also covers a `*.workers.dev` / `*.pages.dev` link. The old `agentos-app.run` host could not stream the 772 kB bundle reliably and has been retired.
 
 Nothing to install — it runs in the browser and works on a phone.
 
@@ -33,7 +33,7 @@ For a copy with nothing added to it, download
 
 The game is one self-contained HTML file plus six PNGs (used for the
 social-preview card), so any static host will serve it. The recommended
-home is **Cloudflare's free tier** — the edge delivers a 770 kB file in
+home is **Cloudflare's free tier** — the edge delivers a 772 kB file in
 well under a second, and the `*.workers.dev` URL is permanent.
 
 Two routes, both starting from this repo:
@@ -104,7 +104,7 @@ it into the "Play it" line at the top of this README.
 ### Why not the old link?
 
 The `agentos-app.run` link that lived here through mid-October 2026 was
-a preview; its edge could not stream the 770 kB bundle reliably
+a preview; its edge could not stream the 772 kB bundle reliably
 (headers arrived, then the body stalled), which produced the
 blank-page symptom. Cloudflare does not have that problem.
 
@@ -145,10 +145,10 @@ shasum -a 256 Viber-League.html
 ```
 
 ```
-ae59e9b44aeb3e4facad657ca4390eb4633f388b5762fe7e43b53525d3b85606
+3314177b33276c5bf597ca6d032871009e0d7c875468095c632c5ab4c4fc6efa
 ```
 
-That is the SHA-256 of the committed `Viber-League.html` — 770 kB, byte for byte.
+That is the SHA-256 of the committed `Viber-League.html` — 772 kB, byte for byte.
 CI runs the same thing on every push and **fails if a fresh build stops matching**,
 so the claim cannot quietly rot.
 

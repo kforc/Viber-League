@@ -48,5 +48,6 @@ function renderFatal(root: HTMLElement, err: Error | null): void {
     </div>
   `;
   root.appendChild(wrap);
-  if (err && import.meta.env.DEV) console.warn('Startup failure detail:', err.message);
+  // Diagnostic detail for developers only — never shown to players.
+  if (err) console.warn('Startup failure detail:', err.message);
 }
