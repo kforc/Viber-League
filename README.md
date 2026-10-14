@@ -85,10 +85,12 @@ If you would rather not install anything:
 
 Because the code already lives on GitHub, the simplest link is one GitHub
 makes for you — no Cloudflare sign-up, no wrangler, no token. A
-[`deploy-pages.yml`](.github/workflows/deploy-pages.yml) workflow builds
-`Viber-League.html`, assembles `site/`, and publishes it on every push to
-`main`. The first run enables Pages with "GitHub Actions" as the source
-automatically.
+[`deploy-pages.yml`](.github/workflows/deploy-pages.yml) workflow runs
+`npm run build` (the Vite `dist/` production build) and publishes it on every
+push to `main` via `actions/deploy-pages`. The first run enables Pages with
+"GitHub Actions" as the source automatically. `vite.config.ts` uses
+`base: './'` so the built assets resolve correctly under the `/viber-league/`
+subpath.
 
 The link takes the form:
 
