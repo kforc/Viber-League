@@ -712,7 +712,13 @@ export class Game {
       canHash: canHashPassword(),
       storageOk: storageAvailable(),
       notice,
-      onGuest: () => this.showTitle(),
+      // The escape hatch is the same promise as the gate's: guest play is
+      // Quick Play, straight to the picker.
+      onGuest: () => {
+        this.guestSession = true;
+        this.enterQuickPlay();
+      },
+      onBack: () => this.goBack(),
       onCreate: async (input) => {
         const profile = await createProfile(input);
         this.profile = profile;
@@ -947,8 +953,15 @@ export class Game {
    * coming back to the title does not ask again.
    */
   private onPlay(): void {
-    if (this.profile || this.guestSession) {
+    // A club player chooses a mode; a guest has only one mode, so PLAY goes
+    // straight to the player picker. The two-door gate appears only on first
+    // contact, and choosing guest once is remembered for the session.
+    if (this.profile) {
       this.nav('modes');
+      return;
+    }
+    if (this.guestSession) {
+      this.enterQuickPlay();
       return;
     }
     this.nav('play-gate');
@@ -961,7 +974,8 @@ export class Game {
     renderPlayGate(this.uiRoot, {
       onGuest: () => {
         this.guestSession = true;
-        this.nav('modes');
+        // Guest play is Quick Play; there is no second mode choice to make.
+        this.enterQuickPlay();
       },
       onReturning: () => this.nav('returning'),
       onBack: () => this.goBack(),
@@ -978,7 +992,8 @@ export class Game {
       manager: stored?.manager,
       hasProfile: Boolean(stored),
       onSignIn: (username, password) => this.trySignIn(username, password),
-      onCreateAccount: () => this.showOnboarding(),
+      // Through nav so BACK from the form returns to this screen, not past it.
+      onCreateAccount: () => this.nav('onboarding'),
       onBack: () => this.goBack(),
     });
     this.present(ROSTER[0], FRAMING.profile);

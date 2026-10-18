@@ -761,6 +761,8 @@ export function renderOnboarding(
     notice?: string;
     onSignIn?: () => void;
     onGuest?: () => void;
+    /** Return to the screen that opened the form. */
+    onBack?: () => void;
     onCreate: (input: {
       manager: string;
       club: string;
@@ -902,12 +904,19 @@ export function renderOnboarding(
   if (opts.notice) card.append(el('p', 'notice', opts.notice));
   card.append(form);
 
-  if (opts.onGuest) {
-    const guestFoot = el('div', 'profile-foot');
-    const guestBtn = el('button', 'ghost-btn', 'Play as Guest');
-    on(guestBtn, 'click', opts.onGuest);
-    guestFoot.append(guestBtn);
-    card.append(guestFoot);
+  if (opts.onBack || opts.onGuest) {
+    const foot = el('div', 'profile-foot split');
+    if (opts.onBack) {
+      const back = el('button', 'ghost-btn', 'Back');
+      on(back, 'click', opts.onBack);
+      foot.append(back);
+    }
+    if (opts.onGuest) {
+      const guestBtn = el('button', 'ghost-btn', 'Play as Guest');
+      on(guestBtn, 'click', opts.onGuest);
+      foot.append(guestBtn);
+    }
+    card.append(foot);
   }
 
   if (!opts.storageOk) {
