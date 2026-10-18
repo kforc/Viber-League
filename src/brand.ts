@@ -24,9 +24,23 @@ export const BRAND = {
   ink: '#0c0f08',
 } as const;
 
-export type IconId = 'viber' | 'ball' | 'bolt' | 'star' | 'crown' | 'shield';
+export type IconId = 'viber' | 'quill' | 'voxel' | 'spike' | 'crown' | 'shield';
 
-export const ICON_IDS: IconId[] = ['viber', 'ball', 'bolt', 'star', 'crown', 'shield'];
+export const ICON_IDS: IconId[] = ['viber', 'quill', 'voxel', 'spike', 'crown', 'shield'];
+
+/**
+ * Crests that have been retired, and the crest that now holds their slot.
+ *
+ * A crest is part of a saved profile, so dropping an id outright would quietly
+ * hand a returning manager the house mark. What the player chose was a *slot*
+ * in the picker, and the slot is what they keep — the artwork inside it is ours
+ * to change.
+ */
+const RETIRED_ICON_IDS: Record<string, IconId> = {
+  ball: 'quill',
+  bolt: 'voxel',
+  star: 'spike',
+};
 
 /* ------------------------------------------------------------------ */
 /* Path helpers — everything is expressed as SVG path data so the two  */
@@ -79,6 +93,31 @@ export function starPath(
     parts.push(`${i === 0 ? 'M' : 'L'} ${n(x)} ${n(y)}`);
   }
   return parts.join(' ') + ' Z';
+}
+
+/**
+ * One triangular spike radiating from a circle.
+ *
+ * The base is a CHORD of the circle, so the triangle reaches inside the disc and
+ * the two shapes overlap. That is the trick that makes a head of hair out of
+ * primitives: every piece is the same fill, so the union has no seam and there
+ * is no hand-authored outline to get wrong.
+ *
+ * `deg` is SVG degrees — 270 points straight up, because y grows downwards.
+ */
+function spikePath(
+  cx: number,
+  cy: number,
+  r: number,
+  deg: number,
+  halfWidthDeg: number,
+  len: number,
+): string {
+  const a = (deg * Math.PI) / 180;
+  const hw = (halfWidthDeg * Math.PI) / 180;
+  const at = (angle: number, radius: number) =>
+    `${n(cx + Math.cos(angle) * radius)} ${n(cy + Math.sin(angle) * radius)}`;
+  return `M ${at(a - hw, r)} L ${at(a, r + len)} L ${at(a + hw, r)} Z`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,29 +219,85 @@ const ICONS: Record<IconId, IconDef> = {
     ],
   },
 
-  ball: {
-    label: 'Football',
-    fill: [circlePath(50, 50, 34)],
-    cut: [
-      'M 50 37 L 62.4 46 L 57.6 60.5 L 42.4 60.5 L 37.6 46 Z',
-    ],
+  /*
+   * The quill.
+   *
+   * A feather blade with its shaft carved out as an arrow — the one idea from
+   * the reference worth keeping, because it is the only part that survives at
+   * 26px. The blade is a single asymmetric leaf: a long convex right edge, a
+   * straighter left edge, and a flat step at the tail where the bare quill
+   * leaves it.
+   *
+   * The arrow is CUT in the badge colour rather than stroked in lime, so the
+   * blade stays one solid shape with a line through it. The head is a chevron
+   * and not a filled triangle: two strokes meeting at a point still read when
+   * the whole crest is 26 pixels wide, where a triangle closes into a blob.
+   */
+  quill: {
+    label: 'Quill',
+    fill: ['M 26 88 C 28 62 46 32 77 13 C 85 47 66 73 41 83 Z'],
+    // The bare quill, past the end of the vane.
+    stroke: [{ d: 'M 29 85 L 21 94', width: 5 }],
     cutStroke: [
-      { d: 'M 50 37 L 50 16', width: 4 },
-      { d: 'M 62.4 46 L 82.3 39.5', width: 4 },
-      { d: 'M 57.6 60.5 L 70 77.5', width: 4 },
-      { d: 'M 42.4 60.5 L 30 77.5', width: 4 },
-      { d: 'M 37.6 46 L 17.7 39.5', width: 4 },
+      { d: 'M 32 83 L 63 31', width: 5 },
+      { d: 'M 52.5 36 L 65 31 L 66 44.5', width: 5 },
     ],
   },
 
-  bolt: {
-    label: 'Bolt',
-    fill: ['M 56 6 L 26 54 L 44 54 L 38 94 L 70 42 L 51 42 Z'],
+  /*
+   * The voxel head.
+   *
+   * The reference is a dark cube with lime eyes; the crest inverts it, because
+   * the artwork here is always lime on ink. So: a lime block of a head, ink
+   * eyes, ink slats for a mouth, plus an antenna and two ears so it does not
+   * read as a battery. Every part is a rounded rectangle — that IS the joke,
+   * and it is also what keeps the shape crisp at 26px.
+   */
+  voxel: {
+    label: 'Voxel',
+    fill: [
+      roundRectPath(39, 9, 22, 12, 3), // antenna cube
+      roundRectPath(47, 20, 6, 14, 1), // antenna stalk
+      roundRectPath(21, 33, 58, 55, 9), // head
+      roundRectPath(12, 52, 10, 18, 3), // left ear
+      roundRectPath(78, 52, 10, 18, 3), // right ear
+    ],
+    cut: [
+      roundRectPath(29, 42, 17, 17, 3),
+      roundRectPath(54, 42, 17, 17, 3),
+      roundRectPath(32, 66, 36, 5, 2),
+      roundRectPath(32, 73, 36, 5, 2),
+      roundRectPath(32, 80, 36, 5, 2),
+    ],
   },
 
-  star: {
-    label: 'Star',
-    fill: [starPath(50, 52, 40, 17)],
+  /*
+   * The spike.
+   *
+   * A round face under a swept head of hair. The hair is six triangles whose
+   * bases are chords of the face circle, so the union has no seam; the lengths
+   * shrink from the left to the right, which is what makes it a sweep rather
+   * than a sunburst.
+   *
+   * The face is lime like everything else, so the hairline has to be DRAWN —
+   * one ink arc across the forehead. Without it this is a spiky ball with two
+   * dots in it.
+   */
+  spike: {
+    label: 'Spike',
+    fill: [
+      circlePath(52, 58, 23),
+      ...([
+        [200, 23],
+        [228, 20],
+        [256, 17],
+        [284, 14],
+        [312, 11],
+        [340, 9],
+      ] as Array<[number, number]>).map(([deg, len]) => spikePath(52, 58, 23, deg, 16, len)),
+    ],
+    cutStroke: [{ d: 'M 31 50 Q 52 35 73 50', width: 5 }],
+    cut: [circlePath(43, 66, 4.6), circlePath(62, 66, 4.6)],
   },
 
   crown: {
@@ -227,9 +322,9 @@ export function iconLabel(id: IconId): string {
 
 /** Narrow an unknown value (a stored profile) to a real icon id. */
 export function asIconId(value: unknown, fallback: IconId = 'viber'): IconId {
-  return typeof value === 'string' && (ICON_IDS as string[]).includes(value)
-    ? (value as IconId)
-    : fallback;
+  if (typeof value !== 'string') return fallback;
+  if ((ICON_IDS as string[]).includes(value)) return value as IconId;
+  return RETIRED_ICON_IDS[value] ?? fallback;
 }
 
 /* ------------------------------------------------------------------ */

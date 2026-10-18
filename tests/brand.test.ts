@@ -212,8 +212,8 @@ describe('brandSvg', () => {
   });
 
   it('draws the badge plate by default and can drop it', () => {
-    expect(brandSvg('ball')).toContain(`fill="${BRAND.ink}"`);
-    const bare = brandSvg('ball', { badge: false });
+    expect(brandSvg('quill')).toContain(`fill="${BRAND.ink}"`);
+    const bare = brandSvg('quill', { badge: false });
     expect(bare).not.toContain('<rect');
   });
 
@@ -262,6 +262,18 @@ describe('asIconId', () => {
   });
 
   it('accepts a caller-chosen fallback', () => {
-    expect(asIconId(undefined, 'bolt')).toBe('bolt');
+    expect(asIconId(undefined, 'voxel')).toBe('voxel');
+  });
+
+  it('maps a retired crest onto the one that took its slot', () => {
+    /*
+     * The picker's slots are what a player chose; the artwork inside them is
+     * ours to redraw. Three crests were replaced, and a club saved before that
+     * must keep its place in the picker rather than being silently handed the
+     * house mark — which is exactly what dropping the ids would have done.
+     */
+    expect(asIconId('ball')).toBe('quill');
+    expect(asIconId('bolt')).toBe('voxel');
+    expect(asIconId('star')).toBe('spike');
   });
 });

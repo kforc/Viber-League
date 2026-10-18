@@ -143,7 +143,7 @@ describe('profile storage', () => {
     manager: 'Alex',
     club: 'Riverside Rovers',
     short: 'RR',
-    icon: 'bolt',
+    icon: 'voxel',
     hash: null,
     salt: null,
     iterations: 100_000,
@@ -244,7 +244,7 @@ describe('password hashing', () => {
     const a = await createProfile({
       manager: 'A',
       club: 'Alpha',
-      icon: 'star',
+      icon: 'spike',
       password: 'same-password',
     });
     const b = await createProfile({
