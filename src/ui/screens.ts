@@ -153,6 +153,8 @@ function cardSlot(
     canAdd: boolean;
     /** Set when the player is injured or suspended and cannot be picked. */
     out?: OutInfo | null;
+    /** Set when the squad is frozen for the season: nothing may be added or dropped. */
+    locked?: boolean;
     onOpen: () => void;
     onToggle: () => void;
   },
@@ -208,9 +210,19 @@ function cardSlot(
   // way to free the slot they are occupying — but ADDING one is not, so the
   // control is disabled rather than merely hidden. A disabled `+` that is still
   // visible is what tells the player the card is out of reach.
+  //
+  // A frozen squad disables BOTH directions, and says so in the label rather
+  // than in a colour: the squad is not full and the player is not injured, so
+  // the only true explanation is the season.
   const add = el('button', `card-add${opts.selected ? ' on' : ''}`, opts.selected ? '−' : '+');
   add.setAttribute('aria-label', opts.selected ? `Remove ${v.name}` : `Add ${v.name} to squad`);
-  if (!opts.selected && (!opts.canAdd || opts.out)) add.disabled = true;
+  if (opts.locked) {
+    add.disabled = true;
+    add.classList.add('blocked');
+    add.setAttribute('aria-label', `${v.name} — squad locked for the season`);
+  } else if (!opts.selected && (!opts.canAdd || opts.out)) {
+    add.disabled = true;
+  }
   if (!opts.selected && opts.out) add.classList.add('blocked');
   on(add, 'click', (ev) => {
     ev.stopPropagation();
@@ -289,6 +301,23 @@ function screenHead(
   }
   if (right) head.append(right);
   return head;
+}
+
+/**
+ * The "locked" pill, for a screen header.
+ *
+ * It goes in the header's right-hand slot, which these screens already spend on
+ * a ring or a chip — so stating the rule costs no vertical space. That matters
+ * on the card screens, where the landscape budget is spent to the pixel and a
+ * note line would come straight out of the card rail.
+ *
+ * Deliberately NOT lime: lime is the colour of a thing you can press, and this
+ * is the colour of a thing you cannot.
+ */
+function lockChip(): HTMLElement {
+  const chip = el('span', 'ovr-chip lock-chip', 'Locked');
+  chip.setAttribute('title', 'Squad locked until the season ends');
+  return chip;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1291,6 +1320,15 @@ export interface SquadSelectOpts {
    * team, and the reserve row would be describing something that cannot exist.
    */
   quick?: boolean;
+  /**
+   * True when the season has frozen this squad.
+   *
+   * The screen still opens — it is the team sheet for the fixture about to be
+   * played, and the only place a promoted substitute for an injured starter is
+   * visible before kick-off — but every control that would edit the twelve goes
+   * inert and the header says why.
+   */
+  locked?: boolean;
   /** Players who cannot be picked, and why. */
   out: OutMap;
   onCard: (id: string) => void;
@@ -1432,7 +1470,9 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   const head = screenHead(
     opts.quick ? 'Choose Your Five' : 'Choose Your Squad',
     opts.onBack,
-    progressRing(opts.selected.length, opts.max),
+    // The ring counts picks that can no longer be made, so a frozen squad shows
+    // the rule in that slot instead of the tally.
+    opts.locked ? lockChip() : progressRing(opts.selected.length, opts.max),
   );
 
   // ---- hero stage: the 3D Viber shows through this band ----
@@ -1474,6 +1514,7 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
         order: i,
         canAdd,
         out: opts.out[v.id] ?? null,
+        locked: opts.locked,
         onOpen: () => opts.onCard(v.id),
         onToggle: () => opts.onToggle(v.id),
       }),
@@ -1486,13 +1527,31 @@ export function renderSquadSelect(root: HTMLElement, opts: SquadSelectOpts): voi
   on(auto, 'click', opts.onAuto);
   const clearBtn = el('button', 'ghost-btn', 'Clear');
   on(clearBtn, 'click', opts.onClear);
+  // Auto Pick and Clear both rewrite the twelve, so a frozen squad offers
+  // neither. They stay visible and disabled: a control that vanishes reads as a
+  // missing feature, one that dims reads as a rule.
+  if (opts.locked) {
+    for (const b of [auto, clearBtn]) {
+      b.disabled = true;
+      b.classList.add('disabled');
+    }
+  }
   // Five AVAILABLE players is the bar, not twelve: a manager with an injured
   // squad should still be able to take the pitch with the bodies they have, and
   // the depth is a choice. Counting the squad rather than the fit would let a
   // player walk on with four available and a dead end at kick-off.
   const short = 5 - opts.selected.filter((id) => !opts.out[id]).length;
-  const next = el('button', 'primary-btn', short > 0 ? `Pick ${short} more` : 'Continue');
-  next.disabled = short > 0;
+  /*
+   * A frozen squad cannot satisfy "pick N more" — there is no pick to make — so
+   * the gate is bypassed rather than left armed. A disabled Continue on a
+   * screen where every control is disabled is the definition of a dead end.
+   */
+  const next = el(
+    'button',
+    'primary-btn',
+    opts.locked ? 'Play Match' : short > 0 ? `Pick ${short} more` : 'Continue',
+  );
+  next.disabled = !opts.locked && short > 0;
   if (next.disabled) next.classList.add('disabled');
   on(next, 'click', opts.onNext);
   actions.append(auto, clearBtn, next);
@@ -1523,6 +1582,8 @@ export function renderViberDetail(
     canAdd: boolean;
     /** Set when the player is injured or suspended and cannot be picked. */
     out?: OutInfo | null;
+    /** Set when the squad is frozen for the season. */
+    locked?: boolean;
     onToggle: () => void;
     onClose: () => void;
   },
@@ -1575,7 +1636,14 @@ export function renderViberDetail(
   sheet.append(special);
 
   const btn = el('button', 'primary-btn', opts.selected ? 'Remove from Squad' : 'Add to Squad');
-  if (!opts.selected && opts.out) {
+  if (opts.locked) {
+    // Checked first, and it wins over everything: a frozen squad is not
+    // "full" and its players are not "unavailable", so none of the other
+    // labels would be true.
+    btn.disabled = true;
+    btn.classList.add('disabled');
+    btn.textContent = 'Squad locked for the season';
+  } else if (!opts.selected && opts.out) {
     // They can still be removed — dropping them frees the slot — but not added.
     btn.disabled = true;
     btn.classList.add('disabled');
@@ -2646,6 +2714,14 @@ export interface LeagueOpts {
   squadSize: number;
   /** Players who cannot be picked, and why — the season's casualty list. */
   out: OutMap;
+  /**
+   * True once the season has frozen the squad.
+   *
+   * The screen has no squad control, so this is not a disabled button here — it
+   * is the sentence that explains why the picker has gone read-only. Without
+   * it, a manager would read the dead cards as a bug.
+   */
+  locked?: boolean;
   tab: LeagueTab;
   onTab: (t: LeagueTab) => void;
   onPlayNext: () => void;
@@ -2724,6 +2800,23 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
         : null;
 
   /*
+   * The lock, said once and near the top.
+   *
+   * There is no squad control on this screen, so this is not a disabled button:
+   * it is the sentence that explains why the picker has gone read-only. A step
+   * that quietly stops working reads as a bug; a step that says why reads as a
+   * rule — and the second half of the line answers the question the first half
+   * raises.
+   */
+  const lockNote = opts.locked
+    ? el(
+        'p',
+        'section-note',
+        'Squad locked until the season ends — injuries are covered from the reserves.',
+      )
+    : null;
+
+  /*
    * The treatment room, named, and placed ABOVE the table.
    *
    * Injuries are the reason the squad is twelve rather than five, so who is
@@ -2754,9 +2847,13 @@ export function renderLeague(root: HTMLElement, opts: LeagueOpts): void {
       rows.append(r);
     }
     box.append(rows);
-    wrap.append(head, tabs, box, body);
+    wrap.append(head, tabs);
+    if (lockNote) wrap.append(lockNote);
+    wrap.append(box, body);
   } else {
-    wrap.append(head, tabs, body);
+    wrap.append(head, tabs);
+    if (lockNote) wrap.append(lockNote);
+    wrap.append(body);
   }
   if (note) wrap.append(note);
 
@@ -2992,6 +3089,8 @@ export interface SquadViewOpts {
   squad: string[];
   /** Players who cannot be picked, and why. */
   out: OutMap;
+  /** True when the season has frozen the squad, so nothing here can be edited. */
+  locked?: boolean;
   onChange: () => void;
   onOpen: (id: string) => void;
   onBack: () => void;
@@ -3125,11 +3224,21 @@ export function renderSquadView(root: HTMLElement, opts: SquadViewOpts): void {
   }
 
   const actions = el('div', 'flow-actions');
-  const change = el('button', 'primary-btn', slotsFilled === 5 ? 'Change Squad' : 'Pick Your Five');
+  // "Change Squad" would be a lie once the season has frozen it, so the one
+  // action becomes the thing that is still true: there is a match to play.
+  const change = el(
+    'button',
+    'primary-btn',
+    opts.locked ? 'Next Match' : slotsFilled === 5 ? 'Change Squad' : 'Pick Your Five',
+  );
   on(change, 'click', opts.onChange);
   actions.append(change);
 
-  wrap.append(head, pitch, balance);
+  wrap.append(head);
+  if (opts.locked) {
+    wrap.append(el('p', 'section-note', 'Squad locked — this side sees out the season.'));
+  }
+  wrap.append(pitch, balance);
   // `append` stringifies null, so an absent warning must be skipped rather than
   // passed through.
   if (warn) wrap.append(warn);
@@ -3152,6 +3261,8 @@ export interface PlayersOpts {
   max: number;
   /** Players who cannot be picked, and why. */
   out: OutMap;
+  /** True when the season has frozen the squad — the library becomes read-only. */
+  locked?: boolean;
   onFilter: (f: RoleFilter) => void;
   onSort: (s: PlayerSort) => void;
   onCard: (id: string) => void;
@@ -3164,8 +3275,13 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
   const wrap = el('div', 'screen squad-screen hero-select players-screen');
 
   // The ring already says how many of the squad are named, so there is nothing
-  // under the title but the title.
-  const head = screenHead('Players', opts.onBack, progressRing(opts.lineup.length, opts.max));
+  // under the title but the title. A frozen squad cannot name any more, so the
+  // ring is replaced by the rule it is obeying.
+  const head = screenHead(
+    'Players',
+    opts.onBack,
+    opts.locked ? lockChip() : progressRing(opts.lineup.length, opts.max),
+  );
 
   const chips = el('div', 'chip-row');
   for (const f of FILTERS) {
@@ -3207,6 +3323,7 @@ export function renderPlayers(root: HTMLElement, opts: PlayersOpts): void {
         order: i,
         canAdd,
         out: opts.out[v.id] ?? null,
+        locked: opts.locked,
         onOpen: () => opts.onCard(v.id),
         onToggle: () => opts.onToggle(v.id),
       }),
@@ -3323,6 +3440,8 @@ export interface SettingsOpts {
   onWeather: (w: WeatherKind | 'random') => void;
   onReducedMotion: (v: boolean) => void;
   onSound: (v: boolean) => void;
+  /** True when the season has frozen the squad, so it cannot be cleared here. */
+  locked?: boolean;
   onResetSquad: () => void;
   onResetCareer: () => void;
   onBack: () => void;
@@ -3384,6 +3503,17 @@ export function renderSettings(root: HTMLElement, opts: SettingsOpts): void {
   ]);
 
   const resetSquad = el('button', 'ghost-btn', 'Clear Squad');
+  /*
+   * Clearing the squad is the biggest squad change there is, so Settings cannot
+   * be the side door into a season that has frozen one. The row stays — hidden
+   * controls read as bugs — and says the reason instead of the action.
+   */
+  if (opts.locked) {
+    resetSquad.disabled = true;
+    resetSquad.classList.add('disabled');
+    resetSquad.textContent = 'Locked';
+    resetSquad.setAttribute('aria-label', 'Squad locked until the season ends');
+  }
   on(resetSquad, 'click', opts.onResetSquad);
 
   const resetCareer = el('button', 'ghost-btn danger', 'Erase Career');

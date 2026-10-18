@@ -231,6 +231,11 @@ Venue → Match length → Opponent → Kick off**
   cover. An injury keeps a Viber out of the next one to three league matches and a
   red card one to two, which is the whole reason the squad holds twelve rather than
   five.
+- **The squad is named once a season.** From the first fixture to the last, the
+  twelve are fixed: nobody can be signed or released, and an injured starter is
+  replaced from the reserves rather than from the roster. The window re-opens when
+  the season ends and the next one begins, which is what lets a season be won by
+  the side you picked rather than the side you could still afford in week four.
 - **Three substitutions** from the pause menu, drawn from the fit players not
   already on the pitch.
 - **A league gate.** Because a save written before leagues existed still has a

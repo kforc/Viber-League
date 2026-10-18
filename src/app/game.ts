@@ -389,6 +389,41 @@ export class Game {
   }
 
   /**
+   * True when this season's squad is frozen.
+   *
+   * A league squad is named once, for a season, and the window closes the
+   * moment the season's first fixture is played. That is the whole rule, and it
+   * exists for one reason: without it a manager whose best player is injured
+   * simply signs a replacement, and the twelve-man squad, the injury list and
+   * every reserve on it stop meaning anything. A season is won by the side you
+   * named, not by the side you could still afford in week four.
+   *
+   * It re-opens by itself. `startNextSeason` clears `results`, so the first
+   * fixture of the new season is played with an open window again — name the
+   * squad, then play it out. Starting a new league clears `results` too, which
+   * is the other honest way out (it costs the season, so it is not a shortcut).
+   *
+   * Quick Play never locks: a friendly is not a season and its five are not a
+   * squad.
+   */
+  private squadLocked(): boolean {
+    if (this.mode === 'quick') return false;
+    if (!leagueExists(this.career)) return false;
+    if (Object.keys(this.career.results).length === 0) return false;
+    /*
+     * The emergency door.
+     *
+     * Absences heal only by playing, and a side that cannot field five cannot
+     * play — so a frozen squad that had lost five of its members would be a
+     * dead end with no fixture it could reach and no way to sign anyone. In
+     * that one state the squad opens again. It is a mercy rather than a
+     * loophole: it can only be reached by a season that is already wrecked, and
+     * a manager who names a bare five has opted into exactly that risk.
+     */
+    return fitSquad(this.career).length >= SQUAD_SIZE;
+  }
+
+  /**
    * The manual reduced-motion switch, on top of the operating system's.
    *
    * `:root[data-motion='reduce']` reuses the same `prefers-reduced-motion`
@@ -459,6 +494,7 @@ export class Game {
       // "seven injured" — and the screen has to say the right one.
       squadSize: this.career.lineup.length,
       out: this.squadAbsences(),
+      locked: this.squadLocked(),
       tab: this.leagueTab,
       onTab: (t) => {
         this.leagueTab = t;
@@ -560,6 +596,16 @@ export class Game {
     // Settings decide the defaults; the venue screen can still override them.
     const preferred = this.career.settings.weather;
     this.weather = preferred === 'random' ? fixtureWeather(this.career.seed, fixture.id) : preferred;
+    /*
+     * The picker is still the first step of a fixture, locked or not.
+     *
+     * It is tempting to skip it once the squad cannot change — there is nothing
+     * to decide — but that would hide the one thing a manager most needs before
+     * a match: the team sheet. Injuries rewrite it (`starters()` promotes the
+     * next fit player), and "their substitute steps up" is a promise the player
+     * has to be able to SEE, not take on trust. So the screen stays and only
+     * its controls go inert.
+     */
     this.nav('squad');
   }
 
@@ -573,6 +619,7 @@ export class Game {
       lineup: this.starters(),
       squad: this.career.lineup,
       out: this.career.absences,
+      locked: this.squadLocked(),
       // Changing the five is the first step of a match, not a side door into
       // one: it goes through the fixture so the opponent is the real one.
       onChange: () => this.playNextFixture(),
@@ -594,6 +641,7 @@ export class Game {
       lineup: this.activeSelected,
       max: LEAGUE_SQUAD_MAX,
       out: this.career.absences,
+      locked: this.squadLocked(),
       onFilter: (f) => {
         this.playersFilter = f;
         this.showPlayers();
@@ -638,7 +686,11 @@ export class Game {
       onWeather: (w) => this.patchSettings({ weather: w }),
       onReducedMotion: (v) => this.patchSettings({ reducedMotion: v }),
       onSound: (v) => this.patchSettings({ sound: v }),
+      locked: this.squadLocked(),
       onResetSquad: () => {
+        // Clearing the squad mid-season is the same squad change the picker
+        // refuses, so Settings cannot be the side door into it.
+        if (this.squadLocked()) return;
         this.selected = [];
         this.commitCareer(withLineup(this.career, []));
         this.showSettings();
@@ -1093,11 +1145,16 @@ export class Game {
     this.state = 'squad';
     clear(this.uiRoot);
     const quick = this.mode === 'quick';
+    // A locked picker is still worth opening: it is the team sheet for the
+    // fixture about to be played, and the only place the promoted substitute for
+    // an injured starter is visible before kick-off.
+    const locked = this.squadLocked();
     renderSquadSelect(this.uiRoot, {
       selected: this.activeSelected,
       focus: this.focus(),
       filter: this.filter,
       quick,
+      locked,
       // Five and no more in Quick Play: a friendly fields no bench, so there is
       // nothing for a sixth pick to be cover for.
       max: quick ? SQUAD_SIZE : LEAGUE_SQUAD_MAX,
@@ -1114,11 +1171,15 @@ export class Game {
         this.showSquad();
       },
       onAuto: () => {
+        // AUTO PICK reorders, and on a short squad it also signs — either way
+        // it is a squad change, so a locked squad refuses it.
+        if (locked) return;
         this.autoPick();
         this.commitLineup();
         this.showSquad();
       },
       onClear: () => {
+        if (locked) return;
         this.activeSelected = [];
         this.commitLineup();
         this.showSquad();
@@ -1173,6 +1234,11 @@ export class Game {
   }
 
   private togglePick(id: string): void {
+    // The last line of defence. Every control that can reach this is disabled
+    // while the squad is locked, but a disabled button is a *look*, and the
+    // rule is a fact about the season — so it is enforced here, where no screen
+    // and no future screen can forget it.
+    if (this.squadLocked()) return;
     const picked = this.activeSelected;
     const cap = this.mode === 'quick' ? SQUAD_SIZE : LEAGUE_SQUAD_MAX;
     if (picked.includes(id)) {
@@ -1207,6 +1273,7 @@ export class Game {
       canAdd: picked.length < (quick ? SQUAD_SIZE : LEAGUE_SQUAD_MAX),
       // A friendly carries no absences, so nobody wears an OUT badge in one.
       out: quick ? null : this.career.absences[id] ?? null,
+      locked: this.squadLocked(),
       onToggle: () => this.togglePick(id),
       onClose: () => this.goBack(),
     });
