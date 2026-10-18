@@ -61,7 +61,7 @@ import {
   type PlayerSort,
   type RoleFilter,
 } from '../ui/screens';
-import { setPlayerClubIdentity } from '../sim/content';
+import { resetPlayerClubIdentity, setPlayerClubIdentity } from '../sim/content';
 import {
   buildTable,
   completeResults,
@@ -790,7 +790,15 @@ export class Game {
       icon: profile.icon,
       hasPassword: Boolean(profile.hash),
       onClose: () => this.goBack(),
-      onSignOut: () => this.showSignIn(),
+      onSignOut: () => {
+        // A sign-out ends the session: drop the in-memory profile, restore the
+        // stand-in identity, and return to the first screen. The club stays in
+        // storage, so Returning User can sign back in.
+        this.profile = null;
+        this.guestSession = false;
+        resetPlayerClubIdentity();
+        this.showTitle();
+      },
     });
   }
 

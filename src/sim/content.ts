@@ -45,10 +45,14 @@ export interface ClubDef {
  * United") was invented filler, and it showed up on the scoreboard and the squad
  * screen as a team nobody had chosen.
  */
+/** The stand-in identity, restored when the active club signs out. */
+const STANDIN_CLUB_NAME = 'Your Club';
+const STANDIN_CLUB_SHORT = 'YOU';
+
 export const PLAYER_CLUB: ClubDef = {
   id: 'vibe_united',
-  name: 'Your Club',
-  short: 'YOU',
+  name: STANDIN_CLUB_NAME,
+  short: STANDIN_CLUB_SHORT,
   // The brand lime. The old 0x2f6df6 was a leftover from the washed-out blue
   // palette the design brief rejects, and it made the user's side read
   // identically to a blue CPU club on the opponent screen — you could not tell
@@ -116,4 +120,14 @@ export function setPlayerClubIdentity(name: string, short: string): void {
   const cleanShort = short.trim().toUpperCase();
   if (cleanName) PLAYER_CLUB.name = cleanName;
   if (cleanShort) PLAYER_CLUB.short = cleanShort.slice(0, 4);
+}
+
+/**
+ * Restore the stand-in identity. Called when the active club signs out, so a
+ * following guest session does not keep wearing the name of a club nobody is
+ * signed in to.
+ */
+export function resetPlayerClubIdentity(): void {
+  PLAYER_CLUB.name = STANDIN_CLUB_NAME;
+  PLAYER_CLUB.short = STANDIN_CLUB_SHORT;
 }
