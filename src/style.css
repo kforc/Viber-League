@@ -2227,6 +2227,51 @@ body {
   box-shadow: 0 1px 0 var(--outline);
 }
 
+/* ---- create-club chip: the guest's entry to the club-creation form ----
+   Same slot and treatment as the account chip, but for a signed-out player.
+   Secondary to PLAY, out of the play path, and top-right so it sits in the
+   safe zone clear of the Android gesture bar that used to clip the form. */
+.menu-screen > .create-club-chip {
+  position: absolute;
+  top: calc(12px + var(--safe-t));
+  right: calc(12px + var(--safe-r));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 52vw;
+  padding: 5px 13px 5px 5px;
+  border-radius: var(--r-pill);
+  border: 3px solid var(--outline);
+  background: rgba(9, 14, 34, 0.82);
+  box-shadow: 0 4px 0 var(--outline);
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.menu-screen > .create-club-chip:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--outline);
+}
+
+.cc-mark {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2.5px solid var(--outline);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .acct-initial {
   flex-shrink: 0;
   width: 26px;
@@ -4940,7 +4985,18 @@ body {
     padding: 3px 10px 3px 3px;
     font-size: 9.5px;
   }
+  .menu-screen > .create-club-chip {
+    top: calc(7px + var(--safe-t));
+    right: calc(9px + var(--safe-r));
+    padding: 3px 10px 3px 3px;
+    font-size: 9.5px;
+  }
   .acct-initial {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+  .cc-mark {
     width: 22px;
     height: 22px;
     font-size: 11px;

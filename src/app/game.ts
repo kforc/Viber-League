@@ -300,18 +300,20 @@ export class Game {
   /**
    * The first screen of the session.
    *
-   * A returning player goes straight to the menu — the whole point of keeping a
-   * profile is that they are *not* asked again. Only a genuinely new player is
-   * sent to onboarding, and only when the browser can actually hold a profile:
-   * a sign-up form whose answers evaporate on reload is worse than no form, so
-   * a browser that blocks storage plays as a guest instead.
+   * Everyone lands on the title screen now. A returning player gets their
+   * account chip; a brand-new player plays as a guest — PLAY is the primary
+   * action and the club-creation form is a secondary, explicit entry they reach
+   * from the title screen once they decide they want a saved identity.
+   *
+   * The old behaviour sent every new player to the "Create Your Club" form
+   * first, burying PLAY under five required fields (name, club, crest, password
+   * x2). That turned away players who just wanted to try the game. Forcing a
+   * sign-up before the first match is the wrong gate; the form is opt-in now.
+   * Storage-blocked browsers still play as guests, and the form's own notice
+   * explains why it cannot save them.
    */
   private bootstrap(): void {
-    if (this.profile || !storageAvailable()) {
-      this.showTitle();
-      return;
-    }
-    this.showOnboarding();
+    this.showTitle();
   }
 
   /** Push the stored club into the sim so the world and every screen agree. */
@@ -892,6 +894,9 @@ export class Game {
       // guest has no club, so the line is simply absent.
       club: profile ? { name: profile.club, icon: profile.icon } : undefined,
       onAccount: profile ? () => this.nav('account') : undefined,
+      // A signed-out player gets a "Create Club" entry in the account slot
+      // instead of the account chip — secondary to PLAY, but reachable.
+      onCreateClub: profile ? undefined : () => this.showOnboarding(),
       onSection: (section) => this.openSection(section),
     });
     // The logo and the PLAY button leave an empty band in the middle; the hero
