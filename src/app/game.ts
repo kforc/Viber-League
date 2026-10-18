@@ -43,8 +43,10 @@ import {
   renderPenaltyShoot,
   renderPause,
   renderPauseConfirm,
+  renderPlayGate,
   renderPlayers,
   renderResult,
+  renderReturningUser,
   renderSettings,
   renderSignIn,
   renderSquadSelect,
@@ -121,6 +123,8 @@ type Mode = 'quick' | 'league';
 type AppState =
   | 'onboarding'
   | 'signin'
+  | 'play-gate'
+  | 'returning'
   | 'account'
   | 'title'
   | 'modes'
@@ -225,9 +229,15 @@ export class Game {
   private filter: RoleFilter = 'ALL';
   /**
    * The player's club, read once at boot and kept for the session. `null` means
-   * nobody has created one yet — which is the only case that shows onboarding.
+   * nobody has created one yet; a guest can still play, but anything that needs
+   * persistence (the league) asks them to create one first.
    */
   private profile: LocalProfile | null = null;
+  /**
+   * True once a guest has chosen PLAY AS GUEST this session, so returning to the
+   * title does not put the two-door gate in front of PLAY again.
+   */
+  private guestSession = false;
   /**
    * The season. Always present: a guest who cannot store a profile still gets a
    * career for the session, it just does not survive the tab closing.
@@ -415,6 +425,16 @@ export class Game {
   }
 
   private showLeague(): void {
+    // A league is a season of a club. Without one there is nothing to name on
+    // the table and nowhere to keep the results, so a guest is sent to create a
+    // club rather than offered a season that cannot persist.
+    if (!this.profile) {
+      this.showOnboarding(
+        'Create a club to start a league — the season is saved to your club.',
+        () => this.showLeague(),
+      );
+      return;
+    }
     // No league yet — offer to start one, or to carry on with the one already on
     // the device. Showing the table here would present seven clubs on zero as
     // though a competition had been played and nobody had turned up.
@@ -510,6 +530,16 @@ export class Game {
    * venue and the length — a fixture is a match, not a shortcut past one.
    */
   private playNextFixture(): void {
+    // The same club rule as the League screen, enforced here too: every route
+    // into the season passes through this function, so it is the one place a
+    // guest cannot slip past it.
+    if (!this.profile) {
+      this.showOnboarding(
+        'Create a club to start a league — the season is saved to your club.',
+        () => this.showLeague(),
+      );
+      return;
+    }
     // Every route into the season declares the mode, so a Quick Play session
     // can never leak its five or its (absent) bench into a league fixture.
     this.mode = 'league';
@@ -674,23 +704,27 @@ export class Game {
     }
   }
 
-  private showOnboarding(): void {
+  private showOnboarding(notice?: string, afterCreate?: () => void): void {
     this.state = 'onboarding';
     clear(this.uiRoot);
     renderOnboarding(this.uiRoot, {
       limits: PROFILE_LIMITS,
       canHash: canHashPassword(),
       storageOk: storageAvailable(),
+      notice,
       onGuest: () => this.showTitle(),
       onCreate: async (input) => {
         const profile = await createProfile(input);
         this.profile = profile;
+        this.guestSession = false;
         this.applyProfile(profile);
         // A brand new club starts a brand new season.
         clearCareer();
         this.commitCareer(defaultCareer());
         this.applyCareer(this.career);
-        this.showTitle();
+        // Continue where the player was stopped, when there is somewhere to go.
+        if (afterCreate) afterCreate();
+        else this.showTitle();
       },
     });
     // The card owns the middle of the screen; the hero stands behind it.
@@ -823,6 +857,12 @@ export class Game {
       case 'signin':
         this.showSignIn();
         break;
+      case 'play-gate':
+        this.showPlayGate();
+        break;
+      case 'returning':
+        this.showReturningUser();
+        break;
       case 'account':
         this.showAccount();
         break;
@@ -886,7 +926,7 @@ export class Game {
     const profile = this.profile;
     // PLAY opens the mode screen rather than diving into the season, so the
     // first decision is how to play and not which fixture is next.
-    renderTitle(this.uiRoot, () => this.nav('modes'), {
+    renderTitle(this.uiRoot, () => this.onPlay(), {
       // A guest has no name to show, so the chip is absent rather than showing
       // a placeholder — but every tile still opens its screen.
       manager: profile?.manager,
@@ -905,6 +945,71 @@ export class Game {
   }
 
   /**
+   * PLAY. A remembered club goes straight to the mode picker; a guest gets the
+   * two-door gate first. Choosing guest once is remembered for the session, so
+   * coming back to the title does not ask again.
+   */
+  private onPlay(): void {
+    if (this.profile || this.guestSession) {
+      this.nav('modes');
+      return;
+    }
+    this.nav('play-gate');
+  }
+
+  /** The choice after PLAY: play as a guest, or sign in to a club. */
+  private showPlayGate(): void {
+    this.state = 'play-gate';
+    clear(this.uiRoot);
+    renderPlayGate(this.uiRoot, {
+      onGuest: () => {
+        this.guestSession = true;
+        this.nav('modes');
+      },
+      onReturning: () => this.nav('returning'),
+      onBack: () => this.goBack(),
+    });
+    this.presentInBand(ROSTER[0], '.modes-spacer', FRAMING.menu, { maxFill: 0.46 });
+  }
+
+  /** The sign-in behind RETURNING USER. */
+  private showReturningUser(): void {
+    this.state = 'returning';
+    clear(this.uiRoot);
+    const stored = loadProfile();
+    renderReturningUser(this.uiRoot, {
+      manager: stored?.manager,
+      hasProfile: Boolean(stored),
+      onSignIn: (username, password) => this.trySignIn(username, password),
+      onCreateAccount: () => this.showOnboarding(),
+      onBack: () => this.goBack(),
+    });
+    this.present(ROSTER[0], FRAMING.profile);
+  }
+
+  /**
+   * Verify a returning player against the club stored on this device.
+   *
+   * There is no server: the "account" is the local profile, so the username is
+   * the manager name saved here. A name mismatch is reported separately from a
+   * wrong password, because the two mean different things to the player.
+   */
+  private async trySignIn(username: string, password: string): Promise<true | string> {
+    const stored = loadProfile();
+    if (!stored) return 'No club is saved on this device yet. Create one below.';
+    if (stored.manager.trim().toLowerCase() !== username.trim().toLowerCase()) {
+      return 'No club with that manager name on this device.';
+    }
+    const ok = await verifyPassword(stored, password);
+    if (!ok) return 'That password does not match this club.';
+    this.profile = stored;
+    this.applyProfile(stored);
+    this.guestSession = false;
+    this.nav('modes');
+    return true;
+  }
+
+  /**
    * How the player wants to play, chosen once.
    *
    * Two tiles, not three. Player-versus-player is a networking layer rather
@@ -918,11 +1023,14 @@ export class Game {
     clear(this.uiRoot);
     const fixtures = playerFixtures();
     renderModes(this.uiRoot, {
-      started: leagueExists(this.career),
+      // A guest has no club, so there is no season to resume — a stored career
+      // on the device belongs to whoever last signed in. The tile says "Not
+      // started" rather than advertising a league the guest cannot enter.
+      started: Boolean(this.profile) && leagueExists(this.career),
       season: this.career.season,
       // Only the player's own fixtures are ever persisted, so a stored result
       // is a game played. This is the same count the League screen shows.
-      played: fixtures.filter((f) => this.career.results[f.id]).length,
+      played: this.profile ? fixtures.filter((f) => this.career.results[f.id]).length : 0,
       total: fixtures.length,
       onQuick: () => this.enterQuickPlay(),
       onLeague: () => this.playNextFixture(),

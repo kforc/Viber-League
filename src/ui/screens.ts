@@ -405,6 +405,46 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
 }
 
 /* ------------------------------------------------------------------ */
+/* 1. The play gate — guest or returning                               */
+/* ------------------------------------------------------------------ */
+
+export interface PlayGateOpts {
+  onGuest: () => void;
+  onReturning: () => void;
+  onBack: () => void;
+}
+
+/**
+ * The choice after PLAY: try the game now, or sign in to a club.
+ *
+ * Two doors and nothing else. Guest play is the primary route — a new player
+ * has not seen a match yet, so nothing is asked of them; the league gate offers
+ * an account only when they reach for something that needs saving. The second
+ * door is the returning-user sign-in, which carries the "New player? Create
+ * account" link. Neither door blocks PLAY.
+ */
+export function renderPlayGate(root: HTMLElement, opts: PlayGateOpts): void {
+  clear(root);
+  const wrap = el('div', 'screen modes-screen');
+  wrap.append(screenHead('Play', opts.onBack));
+  wrap.append(el('div', 'modes-spacer'));
+
+  const actions = el('div', 'flow-actions gate-actions');
+
+  const guest = el('button', 'primary-btn wide', 'Play as Guest');
+  guest.type = 'button';
+  on(guest, 'click', opts.onGuest);
+
+  const returning = el('button', 'ghost-btn wide', 'Returning User');
+  returning.type = 'button';
+  on(returning, 'click', opts.onReturning);
+
+  actions.append(guest, returning);
+  wrap.append(actions);
+  root.append(wrap);
+}
+
+/* ------------------------------------------------------------------ */
 /* 1a. Mode select — how the player wants to play                      */
 /* ------------------------------------------------------------------ */
 
@@ -734,6 +774,8 @@ export function renderOnboarding(
     limits: ProfileLimits;
     canHash: boolean;
     storageOk: boolean;
+    /** Why the form opened, when the player did not choose it themselves. */
+    notice?: string;
     onSignIn?: () => void;
     onGuest?: () => void;
     onCreate: (input: {
@@ -873,7 +915,9 @@ export function renderOnboarding(
     submit,
   );
 
-  card.append(head, form);
+  card.append(head);
+  if (opts.notice) card.append(el('p', 'notice', opts.notice));
+  card.append(form);
 
   if (opts.onGuest) {
     const guestFoot = el('div', 'profile-foot');
@@ -912,6 +956,130 @@ export function renderOnboarding(
   wrap.append(card);
   root.append(wrap);
   manager.input.focus();
+}
+
+/* ------------------------------------------------------------------ */
+/* Returning user — the sign-in behind the second door                 */
+/* ------------------------------------------------------------------ */
+
+export interface ReturningUserOpts {
+  /** The manager name already on this device, used to pre-fill the box. */
+  manager?: string;
+  /** Whether a club is actually stored here, so the form can say when it cannot match. */
+  hasProfile: boolean;
+  /** `true` on success (the game navigates), or an error string to show. */
+  onSignIn: (username: string, password: string) => void | Promise<true | string>;
+  onCreateAccount: () => void;
+  onBack: () => void;
+}
+
+/**
+ * The returning-user form: username, password, and the way out for someone who
+ * has no club yet.
+ *
+ * This is a device-local club, not a server account, so the "username" is the
+ * manager name saved on this device. When nothing is stored the form still
+ * opens — the player may be looking for a club from another device — but it
+ * says plainly that there is none here and points at Create account, rather
+ * than failing silently on submit.
+ */
+export function renderReturningUser(root: HTMLElement, opts: ReturningUserOpts): void {
+  clear(root);
+  const wrap = el('div', 'screen profile-screen signin-screen');
+  const card = el('div', 'profile-card');
+
+  const head = el('div', 'profile-head');
+  head.append(brand(), el('h1', 'screen-title', 'Welcome back'));
+
+  const errorEl = el('p', 'form-error');
+  errorEl.setAttribute('role', 'alert');
+
+  const username = field({
+    id: 'ru-manager',
+    label: 'Username',
+    placeholder: 'your manager name',
+    autocomplete: 'username',
+  });
+  if (opts.manager) username.input.value = opts.manager;
+
+  const password = field({
+    id: 'ru-password',
+    label: 'Password',
+    type: 'password',
+    placeholder: 'your password',
+    autocomplete: 'current-password',
+  });
+
+  const submit = el('button', 'primary-btn profile-submit', 'Sign in');
+  submit.type = 'submit';
+
+  let busy = false;
+  const fail = (message: string) => {
+    errorEl.textContent = message;
+    errorEl.classList.add('show');
+  };
+
+  const run = () => {
+    if (busy) return;
+    errorEl.classList.remove('show');
+    const name = username.input.value.trim();
+    if (!name) {
+      fail('Enter your manager name.');
+      username.input.focus();
+      return;
+    }
+    busy = true;
+    submit.disabled = true;
+    submit.textContent = 'Checking…';
+    Promise.resolve(opts.onSignIn(name, password.input.value))
+      .then((result) => {
+        if (result === true) return; // the game has navigated away
+        busy = false;
+        submit.disabled = false;
+        submit.textContent = 'Sign in';
+        fail(typeof result === 'string' ? result : 'Could not sign in.');
+      })
+      .catch(() => {
+        busy = false;
+        submit.disabled = false;
+        submit.textContent = 'Sign in';
+        fail('Could not check that club. Please try again.');
+      });
+  };
+
+  const form = el('form', 'profile-form narrow');
+  form.setAttribute('novalidate', '');
+  on(form, 'submit', (ev) => {
+    ev.preventDefault();
+    run();
+  });
+  form.append(username.wrap, password.wrap, errorEl, submit);
+
+  card.append(head);
+
+  if (!opts.hasProfile) {
+    card.append(
+      el(
+        'p',
+        'notice',
+        'No club is saved on this device yet. Create one below and it will be waiting next time.',
+      ),
+    );
+  }
+
+  card.append(form);
+
+  const foot = el('div', 'profile-foot split');
+  const create = el('button', 'ghost-btn', 'New player? Create account');
+  on(create, 'click', opts.onCreateAccount);
+  const back = el('button', 'ghost-btn', 'Back');
+  on(back, 'click', opts.onBack);
+  foot.append(create, back);
+  card.append(foot);
+
+  wrap.append(card);
+  root.append(wrap);
+  username.input.focus();
 }
 
 export function renderSignIn(

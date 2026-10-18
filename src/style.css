@@ -2163,6 +2163,13 @@ body {
   margin-top: 15px;
 }
 
+/* Two foot actions side by side (create account + back), wrapping on a narrow
+   phone rather than squeezing one of them into a two-word column. */
+.profile-foot.split {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .profile-submit {
   width: 100%;
   margin-top: 4px;
