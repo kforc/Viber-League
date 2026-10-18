@@ -934,9 +934,6 @@ export class Game {
       // guest has no club, so the line is simply absent.
       club: profile ? { name: profile.club, icon: profile.icon } : undefined,
       onAccount: profile ? () => this.nav('account') : undefined,
-      // A signed-out player gets a "Create Club" entry in the account slot
-      // instead of the account chip — secondary to PLAY, but reachable.
-      onCreateClub: profile ? undefined : () => this.showOnboarding(),
       onSection: (section) => this.openSection(section),
     });
     // The logo and the PLAY button leave an empty band in the middle; the hero

@@ -324,12 +324,6 @@ export interface TitleOpts {
    */
   club?: { name: string; icon: IconId };
   onAccount?: () => void;
-  /**
-   * The signed-out counterpart to `onAccount`. Shown as a chip in the account
-   * slot for a guest, so creating a club is an explicit, secondary action that
-   * never stands between the player and PLAY.
-   */
-  onCreateClub?: () => void;
   /** Every tile on the menu opens a real screen. */
   onSection: (section: MenuSection) => void;
 }
@@ -387,17 +381,6 @@ export function renderTitle(root: HTMLElement, onStart: () => void, opts?: Title
       el('span', 'acct-name', opts.manager),
     );
     on(chip, 'click', opts.onAccount);
-    wrap.append(chip);
-  } else if (opts?.onCreateClub) {
-    // The signed-out counterpart to the account chip: an explicit, secondary way
-    // to reach the club-creation form. Out of the play path by design, so it
-    // can never gate PLAY.
-    const chip = el('button', 'create-club-chip');
-    chip.setAttribute('aria-label', 'Create your club');
-    const mark = el('span', 'cc-mark');
-    mark.append(iconNode('viber', 16));
-    chip.append(mark, el('span', '', 'Create Club'));
-    on(chip, 'click', opts.onCreateClub);
     wrap.append(chip);
   }
 
